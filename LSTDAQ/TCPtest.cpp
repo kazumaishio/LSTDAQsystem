@@ -12,6 +12,7 @@ int main()
   unsigned long lConnected=0;
   
   TCPClientSocket *tcps;
+  tcps = new TCPClientSocket();
   tcps->connectTcp(szAddr,shPort,lConnected);
   tcps->readSock(__g_buff,976);
   tcps->closeSock();
