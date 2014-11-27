@@ -13,7 +13,7 @@ using namespace std;
 void *Collector_thread(void *arg)
 {
   //receive buffer(From socket to ringbuffer)
-  unsigned char tempbuf[976];
+  char tempbuf[976];
   //ring buffer(From receive buffer to Builder)
   LSTDAQ::RingBuffer *rb = (LSTDAQ::RingBuffer*)arg;
 
@@ -27,23 +27,25 @@ void *Collector_thread(void *arg)
 
   
 //  while(1)
-  for (int i = 0; i<100; i++)
+  for (int i = 0; i<10; i++)
   {
     tcps->readSock(tempbuf,976);
-    rb->write((unsigned int *)tempbuf);
+    rb->write(tempbuf);
   }
 
 }
 
 void *Builder_thread(void *arg)
 {
+  unsigned long long llRead = 0;
   char outdata[976];
   LSTDAQ::RingBuffer *rb = (LSTDAQ::RingBuffer*)arg;
-//  while(1)
-  for (int i = 0; i<100; i++)
+ while(1)
+  // for (int i = 0; i<10; i++)
   {
-    rb->read((unsigned int*)outdata);
-    //cout<<outdata<<endl;
+    llRead +=rb->read(outdata);
+    if(llRead>=9760)break;
+    
   }
 
 
@@ -52,25 +54,30 @@ void *Builder_thread(void *arg)
 
 int main()
 {
-  
 //  using namespace std;
-　pthread_t handle[2];
+  pthread_t handle[2];
+  cout<<"comehere1"<<endl;
 // 　pthread_mutex_t mutex;
-  LSTDAQ::RingBuffer *rb;
+  LSTDAQ::RingBuffer *rb = new LSTDAQ::RingBuffer();
+  cout<<"comehere2"<<endl;
+  //rb = new LSTDAQ::RingBuffer();
+  cout<<"comehere3"<<endl;
   // pthread_mutex_init(&mutex, NULL);
   pthread_create(&handle[0],
                    NULL,
                    &Builder_thread,
                    (void*)rb);
+  cout<<"comehere4"<<endl;
   pthread_create(&handle[1],
                    NULL,
                    &Collector_thread,
                    (void*)rb);
+  cout<<"comehere5"<<endl;
   for(int i=0;i<2;i++)
     pthread_join(handle[i],NULL);
 
 
-  delete rb;
+  //delete rb;
 
 
 
