@@ -5,36 +5,46 @@
 #include <string>
 #include <unistd.h>//for sleep()
 #include "RingBuffer.hpp"
+#include "TCPClientSocket.hpp"
 
-//unsigned int __g_buff[128];//receive buffer
+
 using namespace std;
 
 void *Collector_thread(void *arg)
 {
+  //receive buffer(From socket to ringbuffer)
+  unsigned char tempbuf[976];
+  //ring buffer(From receive buffer to Builder)
   LSTDAQ::RingBuffer *rb = (LSTDAQ::RingBuffer*)arg;
-while(1)
-{
 
-  char tempdata[128];
-  cin>>tempdata;
-cin.clear();
+  //connection
+  char szAddr[18]="192.168.10.1";
+  unsigned short shPort = 24;
+  unsigned long lConnected = 0;
+  LSTDAQ::LIB::TCPClientSocket *tcps;
+  tcps = new LSTDAQ::LIB::TCPClientSocket();
+  tcps->connectTcp(szAddr,shPort,lConnected);
 
-  int outcount;
-  rb->write((unsigned int *)tempdata);
-}
+  
+//  while(1)
+  for (int i = 0; i<100; i++)
+  {
+    tcps->readSock(tempbuf,976);
+    rb->write((unsigned int *)tempbuf);
+  }
 
 }
 
 void *Builder_thread(void *arg)
 {
-  char outdata[128];
+  char outdata[976];
   LSTDAQ::RingBuffer *rb = (LSTDAQ::RingBuffer*)arg;
-while(1)
-{
-
-  rb->read((unsigned int*)outdata);
-  cout<<outdata<<endl;
-}
+//  while(1)
+  for (int i = 0; i<100; i++)
+  {
+    rb->read((unsigned int*)outdata);
+    //cout<<outdata<<endl;
+  }
 
 
 }
@@ -42,9 +52,9 @@ while(1)
 
 int main()
 {
-  //  using namespace std;
+  
+//  using namespace std;
 　pthread_t handle[2];
-　
 // 　pthread_mutex_t mutex;
   LSTDAQ::RingBuffer *rb;
   // pthread_mutex_init(&mutex, NULL);
@@ -58,6 +68,7 @@ int main()
                    (void*)rb);
   for(int i=0;i<2;i++)
     pthread_join(handle[i],NULL);
+
 
   delete rb;
 
