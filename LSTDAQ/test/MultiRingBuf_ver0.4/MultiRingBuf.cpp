@@ -36,7 +36,8 @@ void sRBcreate(int Nconn)
   {
     sRB[i].sRBid = i;
     sRB[i].rb = new LSTDAQ::RingBuffer();
-    sRB[i].next=&sRB[i]
+    sRB[i].next=&sRB[i];
+    
   }
 }
 
