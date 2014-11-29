@@ -7,6 +7,7 @@
 using namespace std;
 
 #define MAX_RINGBUF 10
+#define DAQ_NEVENT  3
 /****************************/
 // struct definition
 /****************************/
@@ -62,9 +63,10 @@ void *Collector_thread(void *arg)
 {
   char tempbuf[976];
   sRingBuffer *srb = (sRingBuffer*)arg;
-
+  
   sprintf(tempbuf,"Hello World!Collector thread wrote %d",srb->sRBid);
-  srb->rb->write((void*)tempbuf);
+  for(int i = 0; i< DAQ_NEVENT;i++)
+    srb->rb->write((void*)tempbuf);
   //sleep(1);
   cout << "Coll"<<srb->sRBid <<" wrote :"<< tempbuf <<endl;
   
@@ -72,9 +74,12 @@ void *Collector_thread(void *arg)
 
 void *Builder_thread(void *arg)
 {
+
   char tempbuf[976];
   sRingBuffer *srb[MAX_RINGBUF];
   srb[0]= (sRingBuffer*)arg;
+  unsigned long long ReadBytes = DAQ_NEVENT * 976;
+
   int Nconn =0;
   while(1)
   {
@@ -84,16 +89,16 @@ void *Builder_thread(void *arg)
     srb[Nconn+1]=srb[Nconn]->next;
     Nconn++;
   }
-  //read two times each.
-  // one is written by main func
-  // the other is written by Collector_thread
-  for(int j=0;j<2;j++)
+  unsigned long long llRead[MAX_RINGBUF] = {0};
+  while(1)
   {
     for(int i =0;i<Nconn;i++)
     {
-      srb[i]->rb->read((void*)tempbuf);
+      llRead[i] +=srb[i]->rb->read((void*)tempbuf);
       cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
+    
     }
+      if(llRead[Nconn-1]>=ReadBytes)break;
   }
   //sleep(1);
 
@@ -106,10 +111,7 @@ void *Builder_thread(void *arg)
 int main()
 {
 
-  char tempbuf[976];
-  char tempbuf2[3][976];
-  strcpy(tempbuf,"Hello world!!init");
-  cout << tempbuf <<endl;
+  cout << "Hello world!!init" <<endl;
   //Reads Connection.conf
   int Nconn=4;
   sRBinit();
@@ -118,11 +120,7 @@ int main()
   //struct test
   //giving struct to another function which only receives void* arg
   cout << "*** Object transfer test ***"<<endl;
-  for(int i=0; i<Nconn;i++)
-    {
-      sprintf(tempbuf,"Hello World!main thread wrote. %d",i);
-      sRB[i].rb->write(tempbuf);
-    }
+  cout << DAQ_NEVENT << "events will be transferred each"<<endl;
   //Multi-threaded process creation
   pthread_t handle[Nconn+1];
   for(int i=0;i<Nconn;i++)
@@ -131,13 +129,8 @@ int main()
                    NULL,
                    &Collector_thread,
                    &sRB[i]);
-//    pthread_create(&handle[i],
-//                    NULL,
-//                    &Builder_thread,
-//                    &sRB[i]);
-//
   }
-  sleep(1);
+  //sleep(1);
   pthread_create(&handle[Nconn],
                  NULL,
                  &Builder_thread,
@@ -145,7 +138,6 @@ int main()
   for(int i=0;i<Nconn+1;i++)
     pthread_join(handle[i],NULL);
   
-  strcpy(tempbuf,"Hello world!!end");
-  cout << tempbuf <<endl;
+  cout << "Hello world!!end" <<endl;
   return 0;
 }
