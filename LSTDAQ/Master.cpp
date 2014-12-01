@@ -16,6 +16,7 @@
 #include <fstream>  //filestream(file I/O)
 #include <sstream>  //stringstream
 #include <iomanip>  //padding cout
+#include <stdlib.h> //exit(1)
 
 #include <pthread.h>
 #include "RingBuffer.hpp"
