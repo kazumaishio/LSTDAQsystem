@@ -6,7 +6,7 @@
 /******************************/
 #define MAX_RINGBUF 10
 #define MAX_CONNECTION 48
-#define DAQ_NEVENT  3
+#define DAQ_NEVENT  100000
 
 #include <iostream> //cout
 #include <string.h> //strcpy
@@ -93,7 +93,7 @@ void *Collector_thread(void *arg)
   {
     tcps->readSock(tempbuf,976);
     srb->rb->write((void*)tempbuf);
-    cout << "Coll"<<srb->sRBid <<" wrote :"<< tempbuf <<endl;
+    // cout << "Coll"<<srb->sRBid <<" wrote :"<< tempbuf <<endl;
   }
 
 }
@@ -126,10 +126,9 @@ void *Builder_thread(void *arg)
     for(int i =0;i<nColl;i++)
     {
       llMesReadBytes[i] +=srb[i]->rb->read((void*)tempbuf);
-      dt->readend();
       //cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
-      
     }
+    dt->readend();
     if(llMesReadBytes[nColl-1]>=ReadBytes)break;
   }
   dt->DAQend();

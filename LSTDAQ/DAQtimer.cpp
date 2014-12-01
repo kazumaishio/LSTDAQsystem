@@ -91,8 +91,7 @@ namespace LSTDAQ{
 //    std::cout<<readcount<<"events read. within "<<llusec/1000000.0<<"sec."<<std::endl;
     readfreq = (double)readcount/llusec*1000000.0;
     std::cout<<readcount<<"events read. within "<<llusec/1000000.0<<"sec."<<std::endl;
-
-    std::cout<<readfreq<<std::endl;
+    std::cout<<"Read Freq is "<<readfreq<<"[Hz]"<<std::endl;
     //delete
   }
 }

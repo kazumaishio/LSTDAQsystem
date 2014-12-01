@@ -49,9 +49,9 @@ namespace LSTDAQ{
     //mutex lock
     pthread_mutex_lock(m_mutex);
     //wait to prevent from overwriting
-    std::cout<<"hello write-->";//<<std::endl; 
+    // std::cout<<"hello write-->";//<<std::endl; 
     if ( m_Nw > m_Nr && m_Nmw == m_Nmr) {
-      std::cout<<"write wait-->"<<std::endl; 
+      // std::cout<<"write wait-->"<<std::endl; 
      pthread_cond_wait(m_cond, m_mutex);
 
     }
@@ -61,7 +61,7 @@ namespace LSTDAQ{
     if (m_Nmw == m_Nm) {
       m_Nmw=0;
     }
-    std::cout<<"write end "<<std::endl;//"m_Nw = "<<m_Nw<<",m_Nmw = "<<m_Nmw<<std::endl;
+    // std::cout<<"write end "<<std::endl;//"m_Nw = "<<m_Nw<<",m_Nmw = "<<m_Nmw<<std::endl;
     //mutex unlock
     pthread_cond_signal(m_cond);
     pthread_mutex_unlock(m_mutex);
@@ -72,16 +72,16 @@ namespace LSTDAQ{
     //sleep(2);
     //mutex lock
     pthread_mutex_lock(m_mutex);
-    std::cout<<"hello read-->";//<<std::endl;
+    // std::cout<<"hello read-->";//<<std::endl;
     //wait to prevent from overreading
     if (m_Nr==m_Nw) {
-      std::cout<<"read wait-->";//<<std::endl;
+      // std::cout<<"read wait-->";//<<std::endl;
       pthread_cond_wait(m_cond, m_mutex);
     }
     memcpy(buf,m_buffer + EVENTSIZE * m_Nmr,EVENTSIZE);
     m_Nr++;
     m_Nmr++;
-    std::cout<<"read end"<<std::endl;//"m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
+    // std::cout<<"read end"<<std::endl;//"m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
     if (m_Nmr == m_Nm) {
       m_Nmr=0;
     }
