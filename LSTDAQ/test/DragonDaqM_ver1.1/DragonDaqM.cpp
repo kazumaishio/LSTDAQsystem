@@ -1,8 +1,8 @@
 ///////////////////////////////////////////////////////////////////////////////////////////
-// DragonDaqM.cpp
+// DragonDaqM.cpp ver 1.1
 // Made from simpleread.cpp
-// Modified by Kazuma Ishio Univ. of Tokyo
-// Last update on 2014/07/28
+// by Kazuma Ishio Univ. of Tokyo
+// Last update on 2014/12/02
 //
 // ****Function****
 //  This program
@@ -229,18 +229,18 @@ int main(int argc, char *argv[])
   /******************************************/
   //int readcount = 0;
   //Maximum value of file discriptor
-  int maxfd=sock[0];
+//  int maxfd=sock[0];
   if(isconnect==0)
     {
       memset(__g_buff,0,sizeof(__g_buff));		
-      fd_set fds, readfds;
-      FD_ZERO(&readfds);
-      for(int i=0;i<nServ;i++)FD_SET(sock[i], &readfds);
-      for(int i=1;i<nServ;i++)
-	{
-	  if(sock[i]>maxfd)maxfd=sock[i];
-	}
-
+//      fd_set fds, readfds;
+//      FD_ZERO(&readfds);
+//      for(int i=0;i<nServ;i++)FD_SET(sock[i], &readfds);
+//      for(int i=1;i<nServ;i++)
+//	{
+//	  if(sock[i]>maxfd)maxfd=sock[i];
+//	}
+//
       struct timeval tv;
       tv.tv_sec = 0;
       tv.tv_usec = 10000;
@@ -252,8 +252,8 @@ int main(int argc, char *argv[])
       clock_gettime(CLOCK_REALTIME,&tsStart);
       for(;;)
 	{
-	  memcpy(&fds,&readfds,sizeof(fd_set));
-	  select(maxfd+1, &fds, NULL, NULL,&tv);
+//	  memcpy(&fds,&readfds,sizeof(fd_set));
+//	  select(maxfd+1, &fds, NULL, NULL,&tv);
 	  if(readcount==-1)
 	    {
 	      usleep(500000);
@@ -263,8 +263,8 @@ int main(int argc, char *argv[])
 	      readcount++;
 	    }
 	  {
-	    if( FD_ISSET(sock[0], &fds) )
-	      {
+//	    if( FD_ISSET(sock[0], &fds) )
+//	      {
 		//printf("come here %d\n",__LINE__);
 		int j=0;
 		{
@@ -305,12 +305,12 @@ int main(int argc, char *argv[])
 		  }
 		  j++;
 		}
-	      }/**if(FD_ISSET(sock1,&fds))**/
+//	      }/**if(FD_ISSET(sock1,&fds))**/
 	  }
 	  // printf("come here %d\n",__LINE__);
 	  for(int i=1;i<nServ;i++){
-	    if( FD_ISSET(sock[i], &fds) )
-	      {
+//	    if( FD_ISSET(sock[i], &fds) )
+//	      {
 		{
 		  int n = read( sock[i],&__g_buff[0],sizeof(__g_buff));
 		  //printf("cluster[%d] read %d Bytes\n ",i,n);
@@ -336,7 +336,7 @@ int main(int argc, char *argv[])
 		      exit(1);
 		    }
 		}
-	      }/**if(FD_ISSET(sock[i],&fds))**/
+//	      }/**if(FD_ISSET(sock[i],&fds))**/
 	  }/**for(i<nServ)**/
 	}/**for(;;)**/
       //printf("readcount :%d\n",readcount);
