@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
   }
   else if(isnewfile)
   {
-    fprintf(fp_ms,"The result of DragonDaq RD%d\n",rddepth);
+    fprintf(fp_ms,"The result of DragonDaqM RD%d\n",rddepth);
     fprintf(fp_ms,"InFreq[Hz] ");
     for(int i=0;i<nServ;i++)fprintf(fp_ms,"RdFreq%d[Hz] RdRate%d[Mbps] ",i,i);
     fprintf(fp_ms,"\n");
