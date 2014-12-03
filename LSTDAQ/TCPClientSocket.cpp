@@ -46,7 +46,11 @@ namespace LSTDAQ{
         m_addrTcp.sin_zero[i] = tcps.m_addrTcp.sin_zero[i];
       return *this;
     }
-
+    //setter & getter
+    int TCPClientSocket::getSock() throw()
+    {
+      return m_sockTcp;
+    }
     //connect method
     bool TCPClientSocket::connectTcp(const char *pszHost,
                     unsigned short shPort,
@@ -57,7 +61,7 @@ namespace LSTDAQ{
       m_sockTcp = socket(AF_INET, SOCK_STREAM, 0);
       if( m_sockTcp < 0 )
       {
-        perror("socket");
+        perror("socket() error");
         return -1;
       }
       m_addrTcp.sin_family = AF_INET;

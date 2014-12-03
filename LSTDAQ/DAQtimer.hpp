@@ -19,16 +19,17 @@ namespace LSTDAQ{
     void DAQstart();
     void readend();
     void DAQend();
-    void DAQsummary();
+    void DAQsummary(int infreq);
     void fclose();
   private:
-    FILE *fp_ms;
-    // const char outputfile[128];// ="LSTDAQmeasure.dat";
+    std::ofstream   m_fout;
+    std::string   m_foutName;
     int m_nServ;
     struct timeval tv;
     struct timespec tsStart,tsEnd,tsRStart;
     struct timespec tsctime1,tsctime2;
     int readcount;
+    int readrate;
     unsigned long long llstartdiffusec;
     unsigned long long lltime_diff[1000];
 

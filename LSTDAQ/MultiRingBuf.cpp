@@ -1,26 +1,19 @@
-/******************************/
-// To be checked:
-// read() in the RB may not be implemented to read 1 event exactly.
-//
-//
-/******************************/
-#define MAX_RINGBUF 49
+#define MAX_RINGBUF 10
 #define MAX_CONNECTION 48
-#define DAQ_NEVENT  100000
+#define DAQ_NEVENT  3
 
 #include <iostream> //cout
 #include <string.h> //strcpy
-//#include <string>
-#include <stdio.h>  //sprintf
-#include <unistd.h> //for sleep()
-#include <fstream>  //filestream(file I/O)
-#include <sstream>  //stringstream
-#include <iomanip>  //padding cout
+//#include <string>//istringstream
+#include <stdio.h>//sprintf
+#include <unistd.h>//for sleep()
+#include <fstream>//filestream(file I/O)
+#include <sstream>//stringstream
+#include <iomanip>//padding cout
 #include <stdlib.h> //exit(1)
 
 #include <pthread.h>
 #include "RingBuffer.hpp"
-#include "TCPClientSocket.hpp"
 #include "DAQtimer.hpp"
 using namespace std;
 int infreq = 0;
@@ -75,11 +68,11 @@ void sRBsetaddr(int sRBid, unsigned short shCid, char *szAddr, unsigned short sh
 
 
 /********************************/
-// Collector thread definition takecare! not same as MultiRingBuf.cpp
+// Collector thread definition takecare! not same as Master.cpp
 /********************************/
 void *Collector_thread(void *arg)
 {
-  
+
   //receive buffer(From socket to ringbuffer)
   char tempbuf[976];
   
@@ -110,28 +103,7 @@ void *Collector_thread(void *arg)
     srb_temp=srb_temp->next;
     //cout<<"srb["<<nServ<<"]->next :"<<srb_temp->next<<endl;
   }
-  cout<<"*** connection ***"<<endl;
-  //connection
-  unsigned long lConnected = 0;
-  LSTDAQ::LIB::TCPClientSocket *tcps[MAX_RINGBUF];
-  int sock[MAX_RINGBUF];
-  for(int i=0;i<nServ;i++)
-  {
-    tcps[i] = new LSTDAQ::LIB::TCPClientSocket();
-    tcps[i]->connectTcp(srb[i]->szAddr,srb[i]->shPort,lConnected);
-    sock[i] = tcps[i]->getSock();
-  }
-  int maxfd=sock[0];
-  fd_set fds, readfds;
-  FD_ZERO(&readfds);
-  for(int i=0;i<nServ;i++)FD_SET(sock[i], &readfds);
-  for(int i=1;i<nServ;i++)
-  {
-    if(sock[i]>maxfd)maxfd=sock[i];
-  }
-  struct timeval tv;
-  tv.tv_sec = 0;
-  tv.tv_usec = 10000;
+  
 
   
   //instead of connection and read
@@ -143,16 +115,11 @@ void *Collector_thread(void *arg)
   cout<<"aaaaaaaa"<<srb[0]->sRBid<<"nServ is "<< nServ<<endl;
   for(int i = 0; i< DAQ_NEVENT;i++)
   {
-    memcpy(&fds,&readfds,sizeof(fd_set));
-    select(maxfd+1, &fds, NULL, NULL,&tv);
-
     for(int j=0;j<nServ;j++)
     {
-      if( FD_ISSET(sock[j], &fds) )
-      tcps[j]->readSock(tempbuf,976);
       srb[j]->rb->write((void*)tempbuf);
       //sleep(1);
-      //cout << "Coll"<<srb[j]->sRBid <<" wrote :"<< tempbuf <<endl;
+      cout << "Coll"<<srb[j]->sRBid <<" wrote :"<< tempbuf <<endl;
     }
   }
 }
@@ -166,7 +133,7 @@ void *Builder_thread(void *arg)
   srb[0]= (sRingBuffer*)arg;
   char tempbuf[976];
   unsigned long long ReadBytes = DAQ_NEVENT * 976;
-  
+
   //variables for measurement
   unsigned long long llMesReadBytes[MAX_RINGBUF] = {0};
   
@@ -265,7 +232,7 @@ int main(int argc, char** argv)
   sRBcreate(nServ);
   for(int i=0;i<nServ;i++)
     sRBsetaddr(i,shCid[i],szAddr[i],shPort[i]);
-  
+
   cout<<"****** Configuration of RinbBuffers are set ******"<<endl;
   cout<<nColl<<" Collectors will be created for "<<nServ<<" connections."<<endl;
   cout<<"RBid "<<"shCid "<<"     IP address     "<<" port "<<endl;
@@ -293,7 +260,7 @@ int main(int argc, char** argv)
                  &Builder_thread,
                  &sRB[0]);
   cout <<"Threads created. "<<
-  DAQ_NEVENT << "events will be transferred each"<<endl;
+      DAQ_NEVENT << "events will be transferred each"<<endl;
   for(int i=0;i<nColl+1;i++)
     pthread_join(handle[i],NULL);
   

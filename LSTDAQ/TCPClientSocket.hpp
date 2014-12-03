@@ -17,16 +17,18 @@ public:
   virtual ~TCPClientSocket(                        ) throw();
   //operator=
   TCPClientSocket &operator = (const TCPClientSocket&) throw();
+  
+  //setter & getter
+  int getSock() throw();
 
   //method
   bool connectTcp(const char *pszHost,
                     unsigned short shPort,
                     unsigned long &lConnectedIP);
   ssize_t readSock(void *buffer, size_t nbytes) throw();
+
   bool closeSock();
   
-  //setter & getter
-
 private:
   int m_sockTcp;
   sockaddr_in m_addrTcp;
