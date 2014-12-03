@@ -8,12 +8,13 @@
 
 SRCDIR  =src
 TMPDIR  =tmp
+INCDIR  =include
 MAIN	=$(SRCDIR)/FakeFEB.c
 
 CFLAGS  = -lrt -std=gnu99
 CC      = gcc $(CFLAGS)
 
-TARGET  = $(MAIN:%.c=%)
+TARGET  = $(MAIN:$(SRCDIR)/%.c=%)
 SRCS	= $(wildcard $(SRCDIR)/*.c)
 OBJS    = $(SRCS:$(SRCDIR)/%.c=$(TMPDIR)/%.o)
 
@@ -25,7 +26,7 @@ $(TARGET): $(MAIN) $(OBJS)
 	@ echo "<< compilation succeeded! >>"
 $(OBJS): $(SRCS)
 	@ echo "<< compiling $@ >>"
-	$(CC) -c $< -o $@
+	$(CC) -c $< -o $@ -I $(INCDIR)
 
 .PHONY: clean echo
 clean:
