@@ -12,7 +12,7 @@
 #include <string.h> //strcpy
 //#include <string>
 #include <stdio.h>  //sprintf
-#include <unistd.h> //for sleep()
+#include <unistd.h> //for sleep()andusleep()
 #include <fstream>  //filestream(file I/O)
 #include <sstream>  //stringstream
 #include <iomanip>  //padding cout
@@ -48,7 +48,7 @@ void sRBinit()
     sRB[i].Cid = -1;
     sRB[i].sRBid = -1;
     sRB[i].next = 0;
-    cout <<sRB[i].next<<endl;
+    // cout <<sRB[i].next<<endl;
   }
 }
 
@@ -81,40 +81,47 @@ void *Collector_thread(void *arg)
 {
   
   //receive buffer(From socket to ringbuffer)
-  char tempbuf[976];
+  char tempbuf[EVENTSIZE];
   
   cout<<"*** Collector_thread initialization ***"<<endl;
   //first RingBuffer
-  sRingBuffer *srb[MAX_RINGBUF];
+  sRingBuffer *srb[MAX_CONNECTION];
   srb[0]= (sRingBuffer*)arg;
   //CollectorID
   int Cid=srb[0]->Cid;
   //next RingBuffers
-  cout<<"next RBs for Coll "<<Cid<<endl;
+  // cout<<"next RBs for Coll "<<Cid<<endl;
   sRingBuffer *srb_temp=srb[0]->next;
   int nServ=1;
   while(1)
   {
     if(srb_temp->sRBid==-1)break;
-    cout<<"RB"<<srb_temp->sRBid<<": Cid is "<<srb_temp->Cid;
+    // cout<<"RB"<<srb_temp->sRBid<<": Cid is "<<srb_temp->Cid;
     if(srb_temp->Cid == Cid)
     {
       srb[nServ]=srb_temp;
-      cout<<" matched."<<endl;
+      // cout<<" matched."<<endl;
       nServ++;
     }
-    else
-    {
-      cout<<endl;
-    }
+    // else
+    // {
+    //   cout<<endl;
+    // }
     srb_temp=srb_temp->next;
     //cout<<"srb["<<nServ<<"]->next :"<<srb_temp->next<<endl;
   }
-  cout<<"*** connection ***"<<endl;
+  cout<< "*** RingBufferList owned by Collector"<<srb[0]->Cid<<endl;
+  for(int i=0;i<nServ;i++)
+  {
+    cout<<"RB"<<srb[i]->sRBid<<endl;
+  }
+  cout<<" :nServ is "<< nServ<<endl;
+  
   //connection
+  cout<<"*** connection initialization ***"<<endl;
   unsigned long lConnected = 0;
-  LSTDAQ::LIB::TCPClientSocket *tcps[MAX_RINGBUF];
-  int sock[MAX_RINGBUF];
+  LSTDAQ::LIB::TCPClientSocket *tcps[MAX_CONNECTION];
+  int sock[MAX_CONNECTION];
   for(int i=0;i<nServ;i++)
   {
     tcps[i] = new LSTDAQ::LIB::TCPClientSocket();
@@ -134,27 +141,48 @@ void *Collector_thread(void *arg)
   tv.tv_usec = 10000;
 
   
-  //instead of connection and read
-  for(int i=0;i<nServ;i++)
-    sprintf(tempbuf,"Hello World!Collector thread wrote %d",srb[i]->sRBid);
   
-  //sleep(1);
-  //  while(1)
-  cout<<"aaaaaaaa"<<srb[0]->sRBid<<"nServ is "<< nServ<<endl;
-  for(int i = 0; i< DAQ_NEVENT;i++)
+
+  unsigned long long daqsize=DAQ_NEVENT * EVENTSIZE;
+  cout<<"*** Collector_thread starts to read ***"<<endl;
+  cout<<daqsize<<" will be read"<<endl;
+  unsigned long long llReadBytes[MAX_CONNECTION]={0};
+  int nRdBytes;
+  bool bReadEnd[MAX_CONNECTION]={false};
+  int ReadEnd=0;
+  for(;;)
   {
     memcpy(&fds,&readfds,sizeof(fd_set));
     select(maxfd+1, &fds, NULL, NULL,&tv);
-
-    for(int j=0;j<nServ;j++)
+    for(int i=0;i<nServ;i++)
     {
-      if( FD_ISSET(sock[j], &fds) )
-      tcps[j]->readSock(tempbuf,976);
-      srb[j]->rb->write((void*)tempbuf);
+      if( FD_ISSET(sock[i], &fds) )
+      {
+	// cout<<"eeee"<<endl;
+        //llReadBytes[i]+=(tcps[i]->readSock(tempbuf,EVENTSIZE));
+        nRdBytes=(tcps[i]->readSock(tempbuf,EVENTSIZE));
+        //if(nRdBytes != EVENTSIZE)
+          //cout<<nRdBytes<<"!!!!!!!"<<EVENTSIZE<<endl;
+        llReadBytes[i]+=nRdBytes;
+        // //cout<<nRdBytes<<"()????"<<endl;
+        srb[i]->rb->write(tempbuf,nRdBytes);
+        // // cout<<tempbuf<<endl;
+        // cout<<i<<"  "<<nRdBytes<<"  "<<llReadBytes[i]<<endl;
+	//cout<<"connection"<<i<<bReadEnd[i]<<endl;
+        if(llReadBytes[i]>=daqsize && !bReadEnd[i])
+        {
+          ReadEnd++;
+          bReadEnd[i]=true;
+	  // cout<<"RB"<<i<<"read end"<<endl;
+        }
+      }
       //sleep(1);
       //cout << "Coll"<<srb[j]->sRBid <<" wrote :"<< tempbuf <<endl;
     }
+    if (ReadEnd==nServ)break;
   }
+  sleep(3);
+  cout << "Coll"<<srb[0]->Cid <<" thread end"<<endl;
 }
 
 /********************************/
@@ -162,37 +190,49 @@ void *Collector_thread(void *arg)
 /********************************/
 void *Builder_thread(void *arg)
 {
-  sRingBuffer *srb[MAX_RINGBUF];
+  //basic preparation
+  sRingBuffer *srb[MAX_CONNECTION];
   srb[0]= (sRingBuffer*)arg;
-  char tempbuf[976];
-  unsigned long long ReadBytes = DAQ_NEVENT * 976;
-  
-  //variables for measurement
-  unsigned long long llMesReadBytes[MAX_RINGBUF] = {0};
-  
-  cout<<"*** Builder_thread initialization ***"<<endl;
-  int nColl =0;
+  char tempbuf[EVENTSIZE];
+
+  //cout<<"*** Builder_thread initialization ***"<<endl;
+  int nRB =0;
   while(1)
   {
-    cout<<"srb["<<nColl<<"] :"<<srb[nColl]->next<<endl;
-    if(srb[nColl]->next==0||nColl==MAX_RINGBUF)break;
-    srb[nColl+1]=srb[nColl]->next;
-    nColl++;
+    cout<<"srb["<<nRB<<"] :"<<srb[nRB]->next<<endl;
+    if(srb[nRB]->next==0||nRB==MAX_RINGBUF)break;
+    srb[nRB+1]=srb[nRB]->next;
+    nRB++;
   }
-  LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nColl);
+  
+  cout<<"*** Builder_thread starts to read ***"<<endl;
+  cout<<DAQ_NEVENT<<"events from "<<nRB<<"RBs"<<endl;
+  bool bReadEnd[MAX_CONNECTION]={false};
+  int ReadEnd=0;
+  unsigned long Nread[MAX_CONNECTION]={0};
+  LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
   dt->DAQstart();
   while(1)
   {
-    for(int i =0;i<nColl;i++)
+    //cout<<"@@"<<ReadEnd<<endl;
+    for(int i =0;i<nRB;i++)
     {
-      llMesReadBytes[i] +=srb[i]->rb->read((void*)tempbuf);
-      //cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
+      Nread[i] =(srb[i]->rb->read(tempbuf));
+      // cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
+      //cout<<i<<":"<<Nread[i];//<<endl;
+      if(Nread[i]>=DAQ_NEVENT && !bReadEnd[i])
+      {
+        ReadEnd++;
+        bReadEnd[i]=true;
+      }
+      //cout<<"ReadEnd"<<ReadEnd<<endl;
     }
     dt->readend();
-    if(llMesReadBytes[nColl-1]>=ReadBytes)break;
+    if (ReadEnd==nRB)break;
   }
   dt->DAQend();
-  dt->DAQsummary(infreq);
+  dt->DAQsummary(infreq,DAQ_NEVENT,nRB);
+  cout << "Builder thread end"<<endl;
   //sleep(1);
 }
 /****************************/
@@ -286,8 +326,9 @@ int main(int argc, char** argv)
                    NULL,
                    &Collector_thread,
                    &sRB[firstRB[i]]);
+    // sleep(1);
   }
-  //sleep(1);
+  //usleep(500);
   pthread_create(&handle[nColl],
                  NULL,
                  &Builder_thread,

@@ -6,7 +6,7 @@
 //#include  <iostream>
 //#include  <stdlib.h>
 #include  <string.h>//for memset
-
+#include "RingBuffer.hpp"
 #include "TCPClientSocket.hpp"
 
 namespace LSTDAQ{

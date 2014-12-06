@@ -87,35 +87,45 @@ namespace LSTDAQ{
     //clock_gettime(CLOCK_REALTIME,&tsEnd);
     current_utc_time(&tsEnd);
   }
-  void DAQtimer::DAQsummary(int infreq)
+  void DAQtimer::DAQsummary(int infreq, unsigned long long nEvent,int nRB)
   {
     unsigned long long llusec = GetRealTimeInterval(&tsStart,&tsEnd);
     std::cout <<llusec<<std::endl;
     double readfreq;
-//    readfreq = (double)readcount/llusec*1000000.0;
-//    std::cout<<readcount<<"events read. within "<<llusec/1000000.0<<"sec."<<std::endl;
-    unsigned long long llRead = readcount * EVENTSIZE;
-    readfreq = (double)readcount/llusec*1000000.0;
+    std::cout<<"By"<<readcount<<"times of reading,"<<std::endl;
+    std::cout<<nEvent<<"events read within "<<llusec/1000000.0<<"sec."<<std::endl;
+    unsigned long long llRead = nEvent * EVENTSIZE;
+    readfreq = (double)nEvent/llusec*1000000.0;
     readrate = (double)(llRead*8)/llusec*1000000.0/1024./1024.;
-    std::cout<<readcount<<"events read. within "<<llusec/1000000.0<<"sec."<<std::endl;
-    std::cout<<"Read Freq is "<<readfreq<<"[Hz]"<<std::endl;
+    std::cout<<"Read Freq :"<<readfreq<<"[Hz]"<<std::endl;
+    std::cout<<"Read Rate :"<<readrate<<"[Mbps]"<<std::endl;
     //**** file create
-    m_foutName = MESFILE;
+    std::ofstream   m_fout;
+    // using namespace std;
+    // m_foutName = MESFILE;
+    // char foutName[128];
+    std::sprintf(m_foutName,MESFILE);
     m_fout.open(m_foutName,std::ios_base::in | std::ios_base::out | std::ios_base::ate);
     if (!m_fout) {
       m_fout.open(m_foutName);
       m_fout<<"The result of LSTDAQ \n";
-      m_fout<<"InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps] ";
+      m_fout<<"nConn  InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps]   nEvents   ReadTrial";
       m_fout<<std::endl;
       std::cout<<"New measurement file is created. "<<std::endl;
     }
     m_fout//<<" "
+    << std::setw(4)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << nRB            << "   "
     << std::setw(6)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
     << infreq         << "     "
     << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(3)
     << readfreq       << "   "
     << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(3)
-    << readrate       <<"\n";
+    << readrate       << "   "
+    << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << nEvent         << "  "
+    << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << readcount      <<"\n";
     m_fout.close();
   }
 }

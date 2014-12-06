@@ -19,11 +19,11 @@ namespace LSTDAQ{
     void DAQstart();
     void readend();
     void DAQend();
-    void DAQsummary(int infreq);
+    void DAQsummary(int infreq, unsigned long long nEvent,int nRB);
     void fclose();
   private:
-    std::ofstream   m_fout;
-    std::string   m_foutName;
+
+    char   m_foutName[128];
     int m_nServ;
     struct timeval tv;
     struct timespec tsStart,tsEnd,tsRStart;
