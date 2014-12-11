@@ -73,6 +73,16 @@ void sRBsetaddr(int sRBid, unsigned short shCid, char *szAddr, unsigned short sh
   }
 }
 
+int getMaxCid()
+{
+  int maxCid=0;
+  for(int i=0;i<MAX_RINGBUF;i++)
+  {
+    if(maxCid<sRB[i].Cid)maxCid=sRB[i].Cid;
+  }
+  return maxCid;
+  
+}
 
 /********************************/
 // Collector thread definition takecare! not same as MultiRingBuf.cpp
@@ -158,7 +168,6 @@ void *Collector_thread(void *arg)
     {
       if( FD_ISSET(sock[i], &fds) )
       {
-	// cout<<"eeee"<<endl;
         //llReadBytes[i]+=(tcps[i]->readSock(tempbuf,EVENTSIZE));
         nRdBytes=(tcps[i]->readSock(tempbuf,EVENTSIZE));
         //if(nRdBytes != EVENTSIZE)
@@ -168,12 +177,12 @@ void *Collector_thread(void *arg)
         srb[i]->rb->write(tempbuf,nRdBytes);
         // // cout<<tempbuf<<endl;
         // cout<<i<<"  "<<nRdBytes<<"  "<<llReadBytes[i]<<endl;
-	//cout<<"connection"<<i<<bReadEnd[i]<<endl;
+        //cout<<"connection"<<i<<bReadEnd[i]<<endl;
         if(llReadBytes[i]>=daqsize && !bReadEnd[i])
         {
           ReadEnd++;
           bReadEnd[i]=true;
-	  // cout<<"RB"<<i<<"read end"<<endl;
+          // cout<<"RB"<<i<<"read end"<<endl;
         }
       }
       //sleep(1);
@@ -181,7 +190,7 @@ void *Collector_thread(void *arg)
     }
     if (ReadEnd==nServ)break;
   }
-  sleep(3);
+  //sleep(3);
   cout << "Coll"<<srb[0]->Cid <<" thread end"<<endl;
 }
 
@@ -192,8 +201,9 @@ void *Builder_thread(void *arg)
 {
   //basic preparation
   sRingBuffer *srb[MAX_CONNECTION];
+  int offset;
   srb[0]= (sRingBuffer*)arg;
-  char tempbuf[EVENTSIZE];
+  char tempbuf[EVENTSIZE*MAX_CONNECTION];
 
   //cout<<"*** Builder_thread initialization ***"<<endl;
   int nRB =0;
@@ -205,36 +215,71 @@ void *Builder_thread(void *arg)
     nRB++;
   }
   
+  
+  int nColl = 1+ getMaxCid();
+  //*********** Output File Creation *************//
+  char buf[128];
+  sprintf(buf,"infreq%d_nColl%d_nRB%d.dat"
+          ,infreq
+          ,nColl
+          ,nRB);
+  FILE *fp_data;
+  fp_data = fopen(buf,"w");
+  int dataLength = EVENTSIZE*nRB;
+  
   cout<<"*** Builder_thread starts to read ***"<<endl;
   cout<<DAQ_NEVENT<<"events from "<<nRB<<"RBs"<<endl;
-  bool bReadEnd[MAX_CONNECTION]={false};
-  int ReadEnd=0;
-  unsigned long Nread[MAX_CONNECTION]={0};
+  //*********** Read Data From RingBuffer (1) *************//
+//  bool bReadEnd[MAX_CONNECTION]={false};
+//  int ReadEnd=0;
+//  unsigned long Nread[MAX_CONNECTION]={0};
+//  LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
+//  dt->DAQstart();
+//  while(1)
+//  {
+//    //cout<<"@@"<<ReadEnd<<endl;
+//    offset = 0;
+//    for(int i =0;i<nRB;i++)
+//    {
+//      //Nread[i] =(srb[i]->rb->read(tempbuf));
+//      while(0!=(Nread[i]=(srb[i]->rb->read(tempbuf))));
+//      // cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
+//      //cout<<i<<":"<<Nread[i];//<<endl;
+//      if(Nread[i]>=DAQ_NEVENT && !bReadEnd[i])
+//      {
+//        ReadEnd++;
+//        bReadEnd[i]=true;
+//      }
+//      //cout<<"ReadEnd"<<ReadEnd<<endl;
+//    }
+//    dt->readend();
+//    if (ReadEnd==nRB)break;
+//  }
+  //*********** Read Data From RingBuffer (2) *************//
+  unsigned long Nread=1;
   LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
   dt->DAQstart();
-  while(1)
+  while(Nread<DAQ_NEVENT+1)
   {
-    //cout<<"@@"<<ReadEnd<<endl;
-    for(int i =0;i<nRB;i++)
+    offset=0;
+    for(int i=0;i<nRB;i++)
     {
-      Nread[i] =(srb[i]->rb->read(tempbuf));
-      // cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
-      //cout<<i<<":"<<Nread[i];//<<endl;
-      if(Nread[i]>=DAQ_NEVENT && !bReadEnd[i])
-      {
-        ReadEnd++;
-        bReadEnd[i]=true;
-      }
-      //cout<<"ReadEnd"<<ReadEnd<<endl;
+      while(Nread!=srb[i]->rb->read(&tempbuf[offset]))continue;
+      offset+=EVENTSIZE;
     }
     dt->readend();
-    if (ReadEnd==nRB)break;
+    //fwrite;
+    fwrite(&tempbuf,dataLength,1,fp_data);
+    Nread++;
   }
   dt->DAQend();
-  dt->DAQsummary(infreq,DAQ_NEVENT,nRB);
-  cout << "Builder thread end"<<endl;
+  dt->DAQsummary(infreq,DAQ_NEVENT,nRB,nColl);
+  fclose(fp_data);
+  cout << "Builder thread end."<< Nread<<"data was read."<<endl;
   //sleep(1);
 }
+
+
 /****************************/
 // main definition
 /****************************/
@@ -328,7 +373,6 @@ int main(int argc, char** argv)
                    &sRB[firstRB[i]]);
     // sleep(1);
   }
-  //usleep(500);
   pthread_create(&handle[nColl],
                  NULL,
                  &Builder_thread,

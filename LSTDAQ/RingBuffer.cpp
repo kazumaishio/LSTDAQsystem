@@ -84,9 +84,9 @@ namespace LSTDAQ{
     {
       if(m_offset+wbytes>m_bufSizeByte)
       {
-        m_remain =m_offset+wbytes -m_bufSizeByte;
+        m_remain = m_offset + wbytes - m_bufSizeByte;
         memcpy(m_buffer + m_offset  ,buf            ,wbytes - m_remain);
-        m_offset =wbytes-m_remain;
+        m_offset = wbytes-m_remain;
         memcpy(m_buffer             ,buf + m_offset ,m_remain);
         m_offset = m_remain;
         m_wbytes = m_remain;
@@ -103,7 +103,7 @@ namespace LSTDAQ{
         m_Nmw++;
         if (m_Nmw == RINGBUFSIZE) {
           m_Nmw=0;
-	  m_offset=0;
+          m_offset=0;
         }
 	//std::cout<<"rb3";
       }

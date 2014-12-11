@@ -19,7 +19,7 @@ namespace LSTDAQ{
     void DAQstart();
     void readend();
     void DAQend();
-    void DAQsummary(int infreq, unsigned long long nEvent,int nRB);
+    void DAQsummary(int infreq, unsigned long long nEvent,int nRB,int nColl);
     void fclose();
   private:
 

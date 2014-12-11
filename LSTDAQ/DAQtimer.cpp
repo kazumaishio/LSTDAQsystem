@@ -87,7 +87,7 @@ namespace LSTDAQ{
     //clock_gettime(CLOCK_REALTIME,&tsEnd);
     current_utc_time(&tsEnd);
   }
-  void DAQtimer::DAQsummary(int infreq, unsigned long long nEvent,int nRB)
+  void DAQtimer::DAQsummary(int infreq, unsigned long long nEvent,int nRB,int nColl)
   {
     unsigned long long llusec = GetRealTimeInterval(&tsStart,&tsEnd);
     std::cout <<llusec<<std::endl;
@@ -109,13 +109,15 @@ namespace LSTDAQ{
     if (!m_fout) {
       m_fout.open(m_foutName);
       m_fout<<"The result of LSTDAQ \n";
-      m_fout<<"nConn  InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps]   nEvents   ReadTrial";
+      m_fout<<"nColl nConn InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps]   nEvents   ReadTrial";
       m_fout<<std::endl;
       std::cout<<"New measurement file is created. "<<std::endl;
     }
     m_fout//<<" "
     << std::setw(4)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
-    << nRB            << "   "
+    << nColl            << "  "
+    << std::setw(4)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << nRB            << "  "
     << std::setw(6)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
     << infreq         << "     "
     << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(3)
