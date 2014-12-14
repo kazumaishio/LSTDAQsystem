@@ -28,10 +28,10 @@ int infreq = 0;
 // struct definition
 /****************************/
 struct sRingBuffer{
-  int sRBid;//RingBufferID
-  int Cid;//Collector ID
-  char szAddr[18];//="192.168.10.1"
-  unsigned short shPort;// = 24;
+  int sRBid;            //RingBufferID
+  int Cid;              //Collector ID
+  char szAddr[18];      //="192.168.10.1"
+  unsigned short shPort;//= 24;
   LSTDAQ::RingBuffer* rb ;
   sRingBuffer* next;
 };
@@ -127,7 +127,6 @@ void *Collector_thread(void *arg)
   }
   cout<<" :nServ is "<< nServ<<endl;
   
-  //connection
   cout<<"*** connection initialization ***"<<endl;
   unsigned long lConnected = 0;
   LSTDAQ::LIB::TCPClientSocket *tcps[MAX_CONNECTION];
@@ -150,8 +149,6 @@ void *Collector_thread(void *arg)
   tv.tv_sec = 0;
   tv.tv_usec = 10000;
 
-  
-  
 
   unsigned long long daqsize=DAQ_NEVENT * EVENTSIZE;
   cout<<"*** Collector_thread starts to read ***"<<endl;
@@ -168,15 +165,14 @@ void *Collector_thread(void *arg)
     {
       if( FD_ISSET(sock[i], &fds) )
       {
-        //llReadBytes[i]+=(tcps[i]->readSock(tempbuf,EVENTSIZE));
         nRdBytes=(tcps[i]->readSock(tempbuf,EVENTSIZE));
         //if(nRdBytes != EVENTSIZE)
           //cout<<nRdBytes<<"!!!!!!!"<<EVENTSIZE<<endl;
         llReadBytes[i]+=nRdBytes;
-        // //cout<<nRdBytes<<"()????"<<endl;
-        srb[i]->rb->write(tempbuf,nRdBytes);
-        // // cout<<tempbuf<<endl;
+        // cout<<"RB"<<srb[i]->sRBid<<"read"<<nRdBytes<<endl;
         // cout<<i<<"  "<<nRdBytes<<"  "<<llReadBytes[i]<<endl;
+        // // cout<<tempbuf<<endl;
+        srb[i]->rb->write(tempbuf,nRdBytes);
         //cout<<"connection"<<i<<bReadEnd[i]<<endl;
         if(llReadBytes[i]>=daqsize && !bReadEnd[i])
         {
@@ -185,7 +181,7 @@ void *Collector_thread(void *arg)
           // cout<<"RB"<<i<<"read end"<<endl;
         }
       }
-      //sleep(1);
+      //usleep(1000000);
       //cout << "Coll"<<srb[j]->sRBid <<" wrote :"<< tempbuf <<endl;
     }
     if (ReadEnd==nServ)break;
@@ -229,48 +225,60 @@ void *Builder_thread(void *arg)
   
   cout<<"*** Builder_thread starts to read ***"<<endl;
   cout<<DAQ_NEVENT<<"events from "<<nRB<<"RBs"<<endl;
-  //*********** Read Data From RingBuffer (1) *************//
-//  bool bReadEnd[MAX_CONNECTION]={false};
-//  int ReadEnd=0;
-//  unsigned long Nread[MAX_CONNECTION]={0};
-//  LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
-//  dt->DAQstart();
-//  while(1)
-//  {
-//    //cout<<"@@"<<ReadEnd<<endl;
-//    offset = 0;
-//    for(int i =0;i<nRB;i++)
-//    {
-//      //Nread[i] =(srb[i]->rb->read(tempbuf));
-//      while(0!=(Nread[i]=(srb[i]->rb->read(tempbuf))));
-//      // cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
-//      //cout<<i<<":"<<Nread[i];//<<endl;
-//      if(Nread[i]>=DAQ_NEVENT && !bReadEnd[i])
-//      {
-//        ReadEnd++;
-//        bReadEnd[i]=true;
-//      }
-//      //cout<<"ReadEnd"<<ReadEnd<<endl;
-//    }
-//    dt->readend();
-//    if (ReadEnd==nRB)break;
-//  }
-  //*********** Read Data From RingBuffer (2) *************//
-  unsigned long Nread=1;
+  //*********** Read Data From RingBuffer without build *************//
+ // bool bReadEnd[MAX_CONNECTION]={false};
+ // int ReadEnd=0;
+ // unsigned long Nread[MAX_CONNECTION]={0};
+ // LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
+ // dt->DAQstart();
+ // while(1)
+ // {
+ //   //cout<<"@@"<<ReadEnd<<endl;
+ //   offset = 0;
+ //   for(int i =0;i<nRB;i++)
+ //   {
+ //     //Nread[i] =(srb[i]->rb->read(tempbuf));
+ //     Nread[i]=srb[i]->rb->read(tempbuf);
+ //     // cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
+ //     //cout<<i<<":"<<Nread[i];//<<endl;
+ //     if(Nread[i]>=DAQ_NEVENT && !bReadEnd[i])
+ //     {
+ //       ReadEnd++;
+ //       bReadEnd[i]=true;
+ //     }
+ //     //cout<<"ReadEnd"<<ReadEnd<<endl;
+ //   }
+ //   dt->readend();
+ //   if (ReadEnd==nRB)break;
+ // }
+//  
+//  dt->DAQend();
+//  dt->DAQsummary(infreq,DAQ_NEVENT,nRB,nColl);
+//  fclose(fp_data);
+//  cout << "Builder thread end."<< Nread[0]<<"data was read."<<endl;
+
+
+  //*********** Read Data From RingBuffer with build *************//
+  unsigned long Nread=0;
   LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
   dt->DAQstart();
-  while(Nread<DAQ_NEVENT+1)
+  while(Nread<DAQ_NEVENT)
   {
     offset=0;
+    Nread++;
     for(int i=0;i<nRB;i++)
     {
-      while(Nread!=srb[i]->rb->read(&tempbuf[offset]))continue;
+      while(Nread!=srb[i]->rb->read(&tempbuf[offset]))
+      {
+  	//cout<<"nowRB"<<i;//<<endl;
+  	continue;
+      }
       offset+=EVENTSIZE;
     }
     dt->readend();
     //fwrite;
     fwrite(&tempbuf,dataLength,1,fp_data);
-    Nread++;
+    // usleep(300000);
   }
   dt->DAQend();
   dt->DAQsummary(infreq,DAQ_NEVENT,nRB,nColl);

@@ -1,7 +1,7 @@
 #ifndef __RINGBUFFER_H
 #define __RINGBUFFER_H
 #define EVENTSIZE 976
-#define RINGBUFSIZE 1000
+#define RINGBUFSIZE 2000
 #include <pthread.h>
 namespace LSTDAQ{
   class RingBuffer

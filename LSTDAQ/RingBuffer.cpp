@@ -49,30 +49,20 @@ namespace LSTDAQ{
   unsigned int RingBuffer::write( char *buf,unsigned int wbytes)
   {
     unsigned int retval;
-    //mutex lock
+    //****** mutex lock ******
     pthread_mutex_lock(m_mutex);
     //std::cout<<"hello write-->";//<<std::endl;
-    //check to prevent from overwriting
-    //std::cout<<"wbytes"<<wbytes<<"m_wbytes"<<m_wbytes;
-    if (m_Nmr>1)
+    //****** prevent from overwriting ******
+    //std::cout<<"W wbytes"<<wbytes<<"m_wbytes"<<m_wbytes;
+    if( m_Nw > m_Nr +RINGBUFSIZE -2)
     {
-      if( m_Nw > m_Nr && m_Nmr - 1 > m_Nmw)
-      {
-        //std::cout<<"write wait1-->"<<std::endl;
-        pthread_cond_wait(m_cond, m_mutex);
-      }
-    }
-    else
-    {
-      //if( m_Nw > m_Nr && m_Nmr + RINGBUFSIZE - 1 > m_Nmw)
-      if( m_Nmw > m_Nmr && m_Nmr + RINGBUFSIZE - 1 > m_Nmw)
-      {
-        //std::cout<<"write wait2-->"<<std::endl;
-        pthread_cond_wait(m_cond, m_mutex);
-      }
+      std::cout<<"W m_Nw = "<<m_Nw<<",m_Nmw = "<<m_Nmw<<std::endl;
+      std::cout<< " m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
+      std::cout<<"write wait-->"<<std::endl;
+      pthread_cond_wait(m_cond, m_mutex);
     }
     
-    //write to RingBuffer
+    //****** write to RingBuffer ******
     if(m_wbytes+wbytes<EVENTSIZE)
     {
       memcpy(m_buffer+m_offset, buf, wbytes);
@@ -92,7 +82,7 @@ namespace LSTDAQ{
         m_wbytes = m_remain;
         m_Nw++;
         m_Nmw=0;
-	//std::cout<<"rb2";
+        //std::cout<<"rb2";
       }
       else
       {
@@ -105,80 +95,49 @@ namespace LSTDAQ{
           m_Nmw=0;
           m_offset=0;
         }
-	//std::cout<<"rb3";
+        //std::cout<<"rb3";
       }
     }
     retval= m_Nw;
-    //std::cout<<"write end "<<std::endl;
-    //std::cout<<"m_Nw = "<<m_Nw<<",m_Nmw = "<<m_Nmw<<std::endl;
-    //mutex unlock
+    // //std::cout<<"write end "<<std::endl;
+    // std::cout<<"W m_Nw = "<<m_Nw<<",m_Nmw = "<<m_Nmw<<std::endl;
+    //****** mutex unlock ******
     pthread_cond_signal(m_cond);
     pthread_mutex_unlock(m_mutex);
     return retval;
   }
+  
   int RingBuffer::read(char *buf)
   {
     int retval;
     //sleep(2);
-    //mutex lock
-    pthread_mutex_lock(m_mutex);
     //std::cout<<"hello read-->";//<<std::endl;
-    //wait to prevent from overreading
+    //****** prevent from overreading ******
     if (m_Nr==m_Nw)
     {
-      // while(1)
-      // {
-      // 	std::cout<<"read wait-->";//<<std::endl;
-      // //std::cout<< "m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
-      // 	pthread_cond_wait(m_cond, m_mutex);
-      // 	if(m_Nr<m_Nw)
-      //     break;
-      // 	pthread_mutex_unlock(m_mutex);
-      // 	pthread_mutex_lock(m_mutex);
-      //  //std::cout<<"read wait end"<<std::endl;
-      // }
-       // pthread_cond_wait(m_cond, m_mutex);
-      // std::cout<< "m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
-       // if(m_Nr>98)std::cout<<"read final m_Nr:"<<m_Nr<<"m_Nw:"<<m_Nw<<std::endl;
-       //}
-       // if(m_Nr<m_Nw)
-       // {
-       // 	 memcpy(buf,m_buffer + EVENTSIZE * m_Nmr,EVENTSIZE);
-       // 	 m_Nr++;
-       // 	 m_Nmr++;
-       // 	 if (m_Nmr == RINGBUFSIZE)
-       // 	   {
-       // 	     m_Nmr=0;
-       // 	   }
-       // }
-       retval=m_Nr;
-      // retval=-1;
-       //mutex unlock
-       pthread_cond_signal(m_cond);
-       pthread_mutex_unlock(m_mutex);
-       //std::cout<<"r"<<retval<<std::endl;
-       // return retval;
+      retval=m_Nr;
+      return retval;
     }
+    //****** read from RingBuffer ******
     else if(m_Nr<m_Nw)
     {
-    // pthread_mutex_lock(m_mutex);
+      pthread_mutex_lock(m_mutex);
       memcpy(buf,m_buffer + EVENTSIZE * m_Nmr,EVENTSIZE);
       m_Nr++;
       m_Nmr++;
       if (m_Nmr == RINGBUFSIZE)
         m_Nmr=0;
-      //std::cout<<"read end"<<std::endl;//
-      //std::cout<< "m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
-      //std::cout<< "m_Nr = "<<m_Nr<<",m_Nw = "<<m_Nw<<std::endl;
+      // //std::cout<<"read end"<<std::endl;//
+      // std::cout<< "R m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
       retval=m_Nr;
-      //mutex unlock
+      //****** mutex unlock ******
       pthread_cond_signal(m_cond);
       pthread_mutex_unlock(m_mutex);
+      return retval;
     }
     else
     {
       exit(1);
     }
-    return retval;
   }
 }
