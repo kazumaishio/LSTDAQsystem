@@ -18,7 +18,8 @@ namespace LSTDAQ{
     m_cond = (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
     pthread_cond_init(m_cond,NULL);
     //info initialization
-    m_offset=0;
+    m_woffset=0;
+    m_roffset=0;
     m_Nw=0;
     m_Nr=0;
     m_Nmw=0;
@@ -65,20 +66,20 @@ namespace LSTDAQ{
     //****** write to RingBuffer ******
     if(m_wbytes+wbytes<EVENTSIZE)
     {
-      memcpy(m_buffer+m_offset, buf, wbytes);
-      m_offset +=wbytes;
+      memcpy(m_buffer+m_woffset, buf, wbytes);
+      m_woffset +=wbytes;
       m_wbytes +=wbytes;
       //std::cout<<"rb1";
     }
     else
     {
-      if(m_offset+wbytes>m_bufSizeByte)
+      if(m_woffset+wbytes>m_bufSizeByte)
       {
-        m_remain = m_offset + wbytes - m_bufSizeByte;
-        memcpy(m_buffer + m_offset  ,buf            ,wbytes - m_remain);
-        m_offset = wbytes-m_remain;
-        memcpy(m_buffer             ,buf + m_offset ,m_remain);
-        m_offset = m_remain;
+        m_remain = m_woffset + wbytes - m_bufSizeByte;
+        memcpy(m_buffer + m_woffset  ,buf            ,wbytes - m_remain);
+        m_woffset = wbytes-m_remain;
+        memcpy(m_buffer             ,buf + m_woffset ,m_remain);
+        m_woffset = m_remain;
         m_wbytes = m_remain;
         m_Nw++;
         m_Nmw=0;
@@ -86,54 +87,58 @@ namespace LSTDAQ{
       }
       else
       {
-        memcpy(m_buffer + m_offset ,buf ,wbytes);
-        m_offset+=wbytes;
+        memcpy(m_buffer + m_woffset ,buf ,wbytes);
+        m_woffset+=wbytes;
         m_wbytes =m_wbytes + wbytes -EVENTSIZE;
         m_Nw++;
         m_Nmw++;
         if (m_Nmw == RINGBUFSIZE) {
           m_Nmw=0;
-          m_offset=0;
+          m_woffset=0;
         }
         //std::cout<<"rb3";
       }
     }
-    retval= m_Nw;
+    //retval= m_Nw;
     // //std::cout<<"write end "<<std::endl;
     // std::cout<<"W m_Nw = "<<m_Nw<<",m_Nmw = "<<m_Nmw<<std::endl;
     //****** mutex unlock ******
-    pthread_cond_signal(m_cond);
+//    pthread_cond_signal(m_cond);
     pthread_mutex_unlock(m_mutex);
-    return retval;
+    //return retval;
+    return m_Nw;
   }
   
   int RingBuffer::read(char *buf)
   {
-    int retval;
+    //int retval;
     //sleep(2);
     //std::cout<<"hello read-->";//<<std::endl;
     //****** prevent from overreading ******
     if (m_Nr==m_Nw)
     {
-      retval=m_Nr;
-      return retval;
+      return m_Nr;
     }
     //****** read from RingBuffer ******
     else if(m_Nr<m_Nw)
     {
       pthread_mutex_lock(m_mutex);
-      memcpy(buf,m_buffer + EVENTSIZE * m_Nmr,EVENTSIZE);
+      memcpy(buf,m_buffer + m_roffset,EVENTSIZE);
       m_Nr++;
       m_Nmr++;
-      if (m_Nmr == RINGBUFSIZE)
+      m_roffset+=EVENTSIZE;
+      if (m_roffset == m_bufSizeByte)
+      {
         m_Nmr=0;
+        m_roffset=0;
+      }
       // //std::cout<<"read end"<<std::endl;//
       // std::cout<< "R m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
-      retval=m_Nr;
+      //retval=m_Nr;
       //****** mutex unlock ******
       pthread_cond_signal(m_cond);
       pthread_mutex_unlock(m_mutex);
-      return retval;
+      return m_Nr;
     }
     else
     {

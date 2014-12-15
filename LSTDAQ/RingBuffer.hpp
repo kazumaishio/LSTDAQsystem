@@ -26,7 +26,8 @@ namespace LSTDAQ{
     const unsigned int m_Nm;
     unsigned char m_buffer[EVENTSIZE*RINGBUFSIZE];
     unsigned int m_bufSizeByte;
-    unsigned int m_offset;
+    unsigned int m_woffset;
+    unsigned int m_roffset;
     unsigned int m_remain;
     unsigned int m_wbytes;//written to the memory
     //total history

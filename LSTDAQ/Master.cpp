@@ -270,12 +270,12 @@ void *Builder_thread(void *arg)
     {
       while(Nread!=srb[i]->rb->read(&tempbuf[offset]))
       {
-  	//cout<<"nowRB"<<i;//<<endl;
-  	continue;
+        //cout<<"nowRB"<<i;//<<endl;
+        dt->readend();
+        continue;
       }
       offset+=EVENTSIZE;
     }
-    dt->readend();
     //fwrite;
     fwrite(&tempbuf,dataLength,1,fp_data);
     // usleep(300000);
