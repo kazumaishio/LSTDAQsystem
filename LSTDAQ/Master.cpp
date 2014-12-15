@@ -24,6 +24,10 @@
 #include "DAQtimer.hpp"
 using namespace std;
 int infreq = 0;
+pthread_mutex_t mutex_initLock  =PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond_allend      =PTHREAD_COND_INITIALIZER;
+int initEnd;
+
 /****************************/
 // struct definition
 /****************************/
@@ -148,8 +152,15 @@ void *Collector_thread(void *arg)
   struct timeval tv;
   tv.tv_sec = 0;
   tv.tv_usec = 10000;
+  
+  //*********** Start Synchronization *************//
+  cout<<"*** CollInit end ***"<<endl;
+  initEnd++;
+  pthread_mutex_lock(&mutex_initLock);
+  pthread_cond_wait(&cond_allend,&mutex_initLock);
+  pthread_mutex_unlock(&mutex_initLock);
 
-
+  //*********** Collector starts to read *************//
   unsigned long long daqsize=DAQ_NEVENT * EVENTSIZE;
   cout<<"*** Collector_thread starts to read ***"<<endl;
   cout<<daqsize<<" will be read"<<endl;
@@ -222,6 +233,13 @@ void *Builder_thread(void *arg)
   FILE *fp_data;
   fp_data = fopen(buf,"w");
   int dataLength = EVENTSIZE*nRB;
+  
+  //*********** Start Synchronization *************//
+  while(initEnd<nColl);
+  cout<<"Bld Confirmed all"<<endl;
+  pthread_mutex_lock(&mutex_initLock);
+  pthread_cond_broadcast(&cond_allend);
+  pthread_mutex_unlock(&mutex_initLock);
   
   cout<<"*** Builder_thread starts to read ***"<<endl;
   cout<<DAQ_NEVENT<<"events from "<<nRB<<"RBs"<<endl;
