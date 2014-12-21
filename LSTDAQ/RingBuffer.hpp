@@ -1,8 +1,14 @@
 #ifndef __RINGBUFFER_H
 #define __RINGBUFFER_H
+
+#ifndef EVENTSIZE 
 #define EVENTSIZE 976
+#endif
+
 #define RINGBUFSIZE 2000
+#define TIMETOWAIT  2
 #include <pthread.h>
+#include "Config.hpp"
 namespace LSTDAQ{
   class RingBuffer
   {
@@ -14,13 +20,16 @@ namespace LSTDAQ{
     //methods
     bool open();
     bool init();
-    unsigned int write( char *buf,unsigned int wbytes);
+    int write( char *buf,unsigned int wbytes);
     int read(char *buf);
 
     //
   private:
     pthread_mutex_t *m_mutex;
     pthread_cond_t *m_cond;
+    
+    //time to wait (on write function)
+    struct timespec m_tsWait;
     
     //buffer
     const unsigned int m_Nm;

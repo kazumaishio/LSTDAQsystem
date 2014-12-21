@@ -1,12 +1,10 @@
 /******************************/
-// To be checked:
-// read() in the RB may not be implemented to read 1 event exactly.
-//
-//
+// LSTDAQ ver2.0
+//  Kazuma Ishio
+//  Modified on 2014/12/21
 /******************************/
-#define MAX_RINGBUF 49
-#define MAX_CONNECTION 48
-#define DAQ_NEVENT  100000
+
+
 
 #include <iostream> //cout
 #include <string.h> //strcpy
@@ -22,11 +20,32 @@
 #include "RingBuffer.hpp"
 #include "TCPClientSocket.hpp"
 #include "DAQtimer.hpp"
-using namespace std;
-int infreq = 0;
+#include "Config.hpp"
+
+
+#define DAQ_NEVENT  100000
+int infreq;
+int Ndaq;
+bool datacreate;
+
+//variables for start synchronizer
 pthread_mutex_t mutex_initLock  =PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond_allend      =PTHREAD_COND_INITIALIZER;
 int initEnd;
+//variable of the number of CPU in the system on which this runs
+int Ncpu;
+
+using namespace std;
+/****************************/
+// print usage
+/****************************/
+void usage(char *argv)
+{
+  printf("usage: %s <infreq[Hz]> <Ndaq[events]> <datacreate> \n",argv);
+  printf("<Ndaq>       -- optional.default value is %d\n",DAQ_NEVENT);
+  printf("<datacreate> -- 1:create data. 0 or no specification: don't create data.\n"); 
+  exit(0);
+}
 
 /****************************/
 // struct definition
@@ -63,7 +82,7 @@ void sRBcreate(int nServ)
     sRB[i].sRBid = i;
     sRB[i].rb = new LSTDAQ::RingBuffer();
     sRB[i].next=&sRB[i+1];
-    cout <<sRB[i].next<<endl;
+    // cout <<sRB[i].next<<endl;
   }
 }
 
@@ -88,6 +107,15 @@ int getMaxCid()
   
 }
 
+void sRBdelete(int nServ)
+{
+  for(int i=0; i<nServ; i++)
+  {
+    delete sRB[i].rb;
+  }
+}
+
+
 /********************************/
 // Collector thread definition takecare! not same as MultiRingBuf.cpp
 /********************************/
@@ -97,12 +125,34 @@ void *Collector_thread(void *arg)
   //receive buffer(From socket to ringbuffer)
   char tempbuf[EVENTSIZE];
   
-  cout<<"*** Collector_thread initialization ***"<<endl;
+  // cout<<"*** Collector_thread initialization ***"<<endl;
+  /******************************************/
+  //  First RB and Collector ID
+  /******************************************/
   //first RingBuffer
   sRingBuffer *srb[MAX_CONNECTION];
   srb[0]= (sRingBuffer*)arg;
   //CollectorID
   int Cid=srb[0]->Cid;
+  
+  
+  /******************************************/
+  //  CPU Specification
+  /******************************************/
+  int cpuid;
+  cpuid = Cid%Ncpu;
+#ifdef __CPU_ZERO
+  cpu_set_t mask;
+  __CPU_ZERO(&mask);
+  __CPU_SET(Ncpu,&mask);
+  if(sched_setaffinity(0,sizeof(mask), &mask) == -1)
+    printf("WARNING: failed to set CPU affinity... (cpuid=%d)\n",cpuid);
+#endif
+  
+  
+  /******************************************/
+  //  Next RBs
+  /******************************************/
   //next RingBuffers
   // cout<<"next RBs for Coll "<<Cid<<endl;
   sRingBuffer *srb_temp=srb[0]->next;
@@ -124,13 +174,16 @@ void *Collector_thread(void *arg)
     srb_temp=srb_temp->next;
     //cout<<"srb["<<nServ<<"]->next :"<<srb_temp->next<<endl;
   }
-  cout<< "*** RingBufferList owned by Collector"<<srb[0]->Cid<<endl;
-  for(int i=0;i<nServ;i++)
-  {
-    cout<<"RB"<<srb[i]->sRBid<<endl;
-  }
-  cout<<" :nServ is "<< nServ<<endl;
+  // cout<< "*** RingBufferList owned by Collector"<<srb[0]->Cid<<endl;
+  // for(int i=0;i<nServ;i++)
+  // {
+  //   cout<<"RB"<<srb[i]->sRBid<<endl;
+  // }
+  // cout<<" :nServ is "<< nServ<<endl;
   
+  /******************************************/
+  // Connection Initialization
+  /******************************************/
   cout<<"*** connection initialization ***"<<endl;
   unsigned long lConnected = 0;
   LSTDAQ::LIB::TCPClientSocket *tcps[MAX_CONNECTION];
@@ -138,7 +191,13 @@ void *Collector_thread(void *arg)
   for(int i=0;i<nServ;i++)
   {
     tcps[i] = new LSTDAQ::LIB::TCPClientSocket();
-    tcps[i]->connectTcp(srb[i]->szAddr,srb[i]->shPort,lConnected);
+    if((tcps[i]->connectTcp(srb[i]->szAddr,
+                            srb[i]->shPort,
+                            lConnected)
+        )<0)
+    {
+      exit(1);
+    }
     sock[i] = tcps[i]->getSock();
   }
   int maxfd=sock[0];
@@ -153,17 +212,22 @@ void *Collector_thread(void *arg)
   tv.tv_sec = 0;
   tv.tv_usec = 10000;
   
-  //*********** Start Synchronization *************//
-  cout<<"*** CollInit end ***"<<endl;
+  /******************************************/
+  //  Start Synchronization
+  /******************************************/
+  // cout<<"*** CollInit end ***"<<endl;
   initEnd++;
   pthread_mutex_lock(&mutex_initLock);
   pthread_cond_wait(&cond_allend,&mutex_initLock);
   pthread_mutex_unlock(&mutex_initLock);
-
-  //*********** Collector starts to read *************//
-  unsigned long long daqsize=DAQ_NEVENT * EVENTSIZE;
+  
+  /******************************************/
+  //  Start to Read From sock
+  //         and Write on RB
+  /******************************************/
+  unsigned long long daqsize=Ndaq * EVENTSIZE;
   cout<<"*** Collector_thread starts to read ***"<<endl;
-  cout<<daqsize<<" will be read"<<endl;
+  // cout<<daqsize<<" will be read"<<endl;
   unsigned long long llReadBytes[MAX_CONNECTION]={0};
   int nRdBytes;
   bool bReadEnd[MAX_CONNECTION]={false};
@@ -177,13 +241,16 @@ void *Collector_thread(void *arg)
       if( FD_ISSET(sock[i], &fds) )
       {
         nRdBytes=(tcps[i]->readSock(tempbuf,EVENTSIZE));
-        //if(nRdBytes != EVENTSIZE)
-          //cout<<nRdBytes<<"!!!!!!!"<<EVENTSIZE<<endl;
+        //if(nRdBytes != EVENTSIZE) is usual
         llReadBytes[i]+=nRdBytes;
         // cout<<"RB"<<srb[i]->sRBid<<"read"<<nRdBytes<<endl;
         // cout<<i<<"  "<<nRdBytes<<"  "<<llReadBytes[i]<<endl;
         // // cout<<tempbuf<<endl;
-        srb[i]->rb->write(tempbuf,nRdBytes);
+        
+        if((srb[i]->rb->write(tempbuf,nRdBytes))==-1)
+        {
+          cout<<"RB"<<srb[i]->sRBid<<":W wait exceeded"<<endl;
+        }
         //cout<<"connection"<<i<<bReadEnd[i]<<endl;
         if(llReadBytes[i]>=daqsize && !bReadEnd[i])
         {
@@ -212,18 +279,31 @@ void *Builder_thread(void *arg)
   srb[0]= (sRingBuffer*)arg;
   char tempbuf[EVENTSIZE*MAX_CONNECTION];
 
+  
+
   //cout<<"*** Builder_thread initialization ***"<<endl;
   int nRB =0;
   while(1)
   {
-    cout<<"srb["<<nRB<<"] :"<<srb[nRB]->next<<endl;
+    // cout<<"srb["<<nRB<<"] :"<<srb[nRB]->next<<endl;
     if(srb[nRB]->next==0||nRB==MAX_RINGBUF)break;
     srb[nRB+1]=srb[nRB]->next;
     nRB++;
   }
   
-  
   int nColl = 1+ getMaxCid();
+  
+  //*********** CPU Specification    *************//
+  int cpuid;
+  cpuid = nColl%Ncpu;
+#ifdef __CPU_ZERO
+  cpu_set_t mask;
+  __CPU_ZERO(&mask);
+  __CPU_SET(Ncpu,&mask);
+  if(sched_setaffinity(0,sizeof(mask), &mask) == -1)
+    printf("WARNING: failed to set CPU affinity... (cpuid=%d)\n",cpuid);
+#endif
+  
   //*********** Output File Creation *************//
   char buf[128];
   sprintf(buf,"infreq%d_nColl%d_nRB%d.dat"
@@ -236,13 +316,13 @@ void *Builder_thread(void *arg)
   
   //*********** Start Synchronization *************//
   while(initEnd<nColl);
-  cout<<"Bld Confirmed all"<<endl;
+  // cout<<"Bld Confirmed all"<<endl;
+  cout<<"*** Builder_thread starts to read ***"<<endl;
+  cout<<Ndaq<<"events from "<<nRB<<"RBs"<<endl;
   pthread_mutex_lock(&mutex_initLock);
   pthread_cond_broadcast(&cond_allend);
   pthread_mutex_unlock(&mutex_initLock);
   
-  cout<<"*** Builder_thread starts to read ***"<<endl;
-  cout<<DAQ_NEVENT<<"events from "<<nRB<<"RBs"<<endl;
   //*********** Read Data From RingBuffer without build *************//
  // bool bReadEnd[MAX_CONNECTION]={false};
  // int ReadEnd=0;
@@ -259,7 +339,7 @@ void *Builder_thread(void *arg)
  //     Nread[i]=srb[i]->rb->read(tempbuf);
  //     // cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
  //     //cout<<i<<":"<<Nread[i];//<<endl;
- //     if(Nread[i]>=DAQ_NEVENT && !bReadEnd[i])
+ //     if(Nread[i]>=Ndaq && !bReadEnd[i])
  //     {
  //       ReadEnd++;
  //       bReadEnd[i]=true;
@@ -271,16 +351,23 @@ void *Builder_thread(void *arg)
  // }
 //  
 //  dt->DAQend();
-//  dt->DAQsummary(infreq,DAQ_NEVENT,nRB,nColl);
+//  dt->DAQsummary(infreq,Ndaq,nRB,nColl);
 //  fclose(fp_data);
 //  cout << "Builder thread end."<< Nread[0]<<"data was read."<<endl;
 
 
   //*********** Read Data From RingBuffer with build *************//
   unsigned long Nread=0;
+  unsigned int *p_Ntrg[MAX_CONNECTION];
+  unsigned int *p_Nevt[MAX_CONNECTION];
+  unsigned long Ntrg[MAX_CONNECTION]={0};
+  unsigned long Nevt[MAX_CONNECTION]={0};
+  unsigned int *pa;
+  unsigned int a;
+  char header[3];
   LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
   dt->DAQstart();
-  while(Nread<DAQ_NEVENT)
+  while(Nread<Ndaq)
   {
     offset=0;
     Nread++;
@@ -288,18 +375,34 @@ void *Builder_thread(void *arg)
     {
       while(Nread!=srb[i]->rb->read(&tempbuf[offset]))
       {
-        //cout<<"nowRB"<<i;//<<endl;
-        dt->readend();
         continue;
       }
+        p_Nevt[i]=(unsigned int*)&tempbuf[offset+HEADERLEN+IPADDRLEN];
+        p_Ntrg[i]=(unsigned int*)&tempbuf[offset+HEADERLEN+IPADDRLEN+EVTNOLEN];
+	// printf("%c%c ",tempbuf[offset],tempbuf[offset+1]);
+	// printf("%d ",*p_Nevt[i]);
+        //cout<<"nowRB"<<i;//<<endl;
+	
+	Nevt[i]=(unsigned long)*p_Nevt[i];
+	Ntrg[i]=(unsigned long)*p_Ntrg[i];
+	if(Nread+DAQ_NEVENT<Ntrg[i])
+	{
+	  dt->DAQerrend(i,infreq,Nread,nRB,nColl,Ntrg,Nevt);
+	  exit(1);
+	}
+	// printf("%d ",Nevt[i]);
+	// printf("%d ",Ntrg[i]);
+
       offset+=EVENTSIZE;
     }
+    dt->readend();
     //fwrite;
-    fwrite(&tempbuf,dataLength,1,fp_data);
+    if(datacreate==true)
+      fwrite(&tempbuf,dataLength,1,fp_data);
     // usleep(300000);
   }
   dt->DAQend();
-  dt->DAQsummary(infreq,DAQ_NEVENT,nRB,nColl);
+  dt->DAQsummary(infreq,Nread,nRB,nColl,Ntrg,Nevt);
   fclose(fp_data);
   cout << "Builder thread end."<< Nread<<"data was read."<<endl;
   //sleep(1);
@@ -311,8 +414,42 @@ void *Builder_thread(void *arg)
 /****************************/
 int main(int argc, char** argv)
 {
-  if(argc==2)infreq = atoi(argv[1]);
-  cout << "Hello world!!init" <<endl;
+  /******************************************/
+  //  Set parameters from args
+  /******************************************/
+  infreq=0;
+  Ndaq=DAQ_NEVENT;
+  datacreate=false;
+  if(argv[1][0]=='h'||argc >4)
+    usage(argv[0]);
+  if(argc >= 2)
+    infreq = atoi(argv[1]);
+  if(argc >= 3)
+    Ndaq = atoi(argv[2]);
+  if(argc == 4)
+  {
+    switch (atoi(argv[3]))
+    {
+    case 1:
+      cout<<"NOTE:data will be created."<<endl;
+      datacreate = true;
+      break;
+    case 0:
+      datacreate = false;
+      break;
+    default:
+      usage(argv[0]);
+    }
+  }
+
+
+  cout << "***LSTDAQ starts***" <<endl;
+  
+  /******************************************/
+  //  CPU Inspection
+  /******************************************/
+  Ncpu = sysconf(_SC_NPROCESSORS_CONF);
+  cout<<"This machine has"<<Ncpu<<" cpus"<<endl;
   /******************************************/
   //  Reading Connection Configuration
   /******************************************/
@@ -389,7 +526,7 @@ int main(int argc, char** argv)
   /******************************************/
   //  Multi-threaded process creation
   /******************************************/
-  cout << "***  Thread create  ***"<<endl;
+  // cout << "***  Thread create  ***"<<endl;
   pthread_t handle[nColl+1];
   for(int i=0;i<nColl;i++)
   {
@@ -403,11 +540,11 @@ int main(int argc, char** argv)
                  NULL,
                  &Builder_thread,
                  &sRB[0]);
-  cout <<"Threads created. "<<
-  DAQ_NEVENT << "events will be transferred each"<<endl;
+  // cout <<"Threads created. "<<
+  // Ndaq << "events will be transferred each"<<endl;
   for(int i=0;i<nColl+1;i++)
     pthread_join(handle[i],NULL);
   
-  cout << "Hello world!!end" <<endl;
+  cout << "LSTDAQ end" <<endl;
   return 0;
 }

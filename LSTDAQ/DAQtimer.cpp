@@ -4,7 +4,7 @@
 #include <time.h>     //for measuring time
 #include <sys/time.h> //for making filename
 #include "DAQtimer.hpp"
-#include "RingBuffer.hpp" //EVENTSIZE
+#include "Config.hpp" //EVENTSIZE
 #include <errno.h>
 #include <ctime>
 #include <unistd.h>   //for inspecting directory
@@ -87,18 +87,31 @@ namespace LSTDAQ{
     //clock_gettime(CLOCK_REALTIME,&tsEnd);
     current_utc_time(&tsEnd);
   }
-  void DAQtimer::DAQsummary(int infreq, unsigned long long nEvent,int nRB,int nColl)
+  void DAQtimer::DAQsummary(int infreq, 
+			    unsigned long long nEvent,
+			    int nRB,
+			    int nColl,
+			    unsigned long Ntrg[MAX_CONNECTION],
+			    unsigned long Nevt[MAX_CONNECTION])
   {
-    unsigned long long llusec = GetRealTimeInterval(&tsStart,&tsEnd);
-    std::cout <<llusec<<std::endl;
-    double readfreq;
-    std::cout<<"By"<<readcount<<"times of reading,"<<std::endl;
-    std::cout<<nEvent<<"events read within "<<llusec/1000000.0<<"sec."<<std::endl;
-    unsigned long long llRead = nEvent * EVENTSIZE;
-    readfreq = (double)nEvent/llusec*1000000.0;
-    readrate = (double)(llRead*8)/llusec*1000000.0/1024./1024.;
+    //requisition time
+    unsigned long long llreq_usec = GetRealTimeInterval(&tsStart,&tsEnd);
+    //daq time (from 2nd to DAQ_NEVENTth events)
+    unsigned long long lldaq_usec = llreq_usec - lltime_diff[0];
+    
+    std::cout<<nEvent<<"events read."<<std::endl;
+    std::cout<<"duration for requisition :"<<llreq_usec<<"usec"<<std::endl;
+    std::cout<<"duration for acquisition :"<<lldaq_usec<<"usec"<<std::endl;
+    
+    double readfreq = (double)(nEvent-1)/(double)lldaq_usec*1000000.0;
+    double readrate = (double)readfreq* (8.*(double)EVENTSIZE/1024./1024.);
+    double thruput = readrate *(double)nRB/1024.;
+
     std::cout<<"Read Freq :"<<readfreq<<"[Hz]"<<std::endl;
     std::cout<<"Read Rate :"<<readrate<<"[Mbps]"<<std::endl;
+    std::cout<<"Throughput:"<<thruput<<"[Gbps]"<<std::endl;
+    
+    
     //**** file create
     std::ofstream   m_fout;
     // using namespace std;
@@ -109,7 +122,13 @@ namespace LSTDAQ{
     if (!m_fout) {
       m_fout.open(m_foutName);
       m_fout<<"The result of LSTDAQ \n";
-      m_fout<<"nColl nConn InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps]   nEvents   ReadTrial";
+      m_fout<<"nColl nConn InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps]   nEvents";
+      for(int i=0;i<nRB;i++)
+      {
+        m_fout<<" Nevt["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
+        m_fout<<" Ntrg["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
+      }
+      m_fout<<" ReadTrial";
       m_fout<<std::endl;
       std::cout<<"New measurement file is created. "<<std::endl;
     }
@@ -124,11 +143,95 @@ namespace LSTDAQ{
     << readfreq       << "   "
     << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(3)
     << readrate       << "   "
-    << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
-    << nEvent         << "  "
-    << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << nEvent         << " ";
+    for(int i=0;i<nRB;i++)
+    {
+      m_fout
+      << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+      << Nevt[i]         << " "
+      << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+      << Ntrg[i]         << " ";
+    }
+    m_fout
+    << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
     << readcount      <<"\n";
     m_fout.close();
   }
+
+  void DAQtimer::DAQerrend(int errRB,
+			   int infreq, 
+			   unsigned long long nEvent,
+			   int nRB,
+			   int nColl,
+			   unsigned long Ntrg[MAX_CONNECTION],
+			   unsigned long Nevt[MAX_CONNECTION])
+  {
+    //requisition time
+    unsigned long long llreq_usec = GetRealTimeInterval(&tsStart,&tsEnd);
+    //daq time (from 2nd to DAQ_NEVENTth events)
+    unsigned long long lldaq_usec = llreq_usec - lltime_diff[0];
+    
+    // std::cout<<nEvent<<"events read."<<std::endl;
+    // std::cout<<"duration for requisition :"<<llreq_usec<<"usec"<<std::endl;
+    // std::cout<<"duration for acquisition :"<<lldaq_usec<<"usec"<<std::endl;
+    
+    double readfreq = (double)(nEvent-1)/(double)lldaq_usec*1000000.0;
+    double readrate = (double)readfreq* (8.*(double)EVENTSIZE/1024./1024.);
+    double thruput = readrate *(double)nRB/1024.;
+    
+    // std::cout<<"Read Freq :"<<readfreq<<"[Hz]"<<std::endl;
+    // std::cout<<"Read Rate :"<<readrate<<"[Mbps]"<<std::endl;
+    // std::cout<<"Throughput:"<<thruput<<"[Gbps]"<<std::endl;
+    
+    std::cout<<"ERROR: drop limit exceeded on RB"<<errRB<<std::endl;
+    //**** file create
+    std::ofstream   m_fout;
+    // using namespace std;
+    // m_foutName = MESFILE;
+    // char foutName[128];
+    std::sprintf(m_foutName,MESFILE);
+    m_fout.open(m_foutName,std::ios_base::in | std::ios_base::out | std::ios_base::ate);
+    if (!m_fout) {
+      m_fout.open(m_foutName);
+      m_fout<<"The result of LSTDAQ \n";
+      m_fout<<"nColl nConn InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps]   nEvents";
+      for(int i=0;i<nRB;i++)
+      {
+        m_fout<<" Nevt["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
+        m_fout<<" Ntrg["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
+      }
+      m_fout<<" ReadTrial";
+      m_fout<<std::endl;
+      std::cout<<"New measurement file is created. "<<std::endl;
+    }
+    m_fout<<"ERROR on RB"<<errRB
+    << std::setw(4)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << nColl            << "  "
+    << std::setw(4)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << nRB            << "  "
+    << std::setw(6)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << infreq         << "     "
+    << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(3)
+    << readfreq       << "   "
+    << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(3)
+    << readrate       << "   "
+    << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << nEvent         << " ";
+    for(int i=0;i<nRB;i++)
+    {
+      m_fout
+      << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+      << Nevt[i]         << " "
+      << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+      << Ntrg[i]         << " ";
+    }
+    m_fout
+    << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << readcount      <<"\n";
+    m_fout.close();
+  }
+
+
 }
 

@@ -5,6 +5,7 @@
 
 #include <fstream> //FILE discriptor
 
+#include "Config.hpp"
 //#include <time.h>     //for measuring time
 //#include <sys/time.h> //for making filename
 
@@ -19,7 +20,19 @@ namespace LSTDAQ{
     void DAQstart();
     void readend();
     void DAQend();
-    void DAQsummary(int infreq, unsigned long long nEvent,int nRB,int nColl);
+    void DAQsummary(int infreq, 
+		    unsigned long long nEvent,
+		    int nRB,
+		    int nColl,
+		    unsigned long Ntrg[MAX_CONNECTION], 
+		    unsigned long Nevt[MAX_CONNECTION]);
+    void DAQerrend(int errRB,
+		   int infreq,
+		   unsigned long long nEvent,
+		   int nRB,
+		   int nColl,
+		   unsigned long Ntrg[MAX_CONNECTION], 
+		   unsigned long Nevt[MAX_CONNECTION]);
     void fclose();
   private:
 
@@ -29,7 +42,6 @@ namespace LSTDAQ{
     struct timespec tsStart,tsEnd,tsRStart;
     struct timespec tsctime1,tsctime2;
     int readcount;
-    int readrate;
     unsigned long long llstartdiffusec;
     unsigned long long lltime_diff[1000];
 

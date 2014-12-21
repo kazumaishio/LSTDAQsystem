@@ -4,6 +4,8 @@
 #include <string.h>//memcpy
 #include <stdlib.h>//malloc
 #include <stdlib.h> //exit(1)
+#include <sys/time.h>//timespec in cond_timedwait
+#include <errno.h>//ETIMEDOUT is defined here
 
 //EVENTSIZE should be variable
 // for multiple connection.
@@ -24,10 +26,10 @@ namespace LSTDAQ{
     m_Nr=0;
     m_Nmw=0;
     m_Nmr=0;
-    std::cout<<"constructor succeed"<<std::endl;
-    std::cout<<"m_bufSizeByte"<<m_bufSizeByte<<std::endl;
-    std::cout<<"RINGBUFSIZE"<<RINGBUFSIZE<<std::endl;
-    std::cout<<"EVENTSIZE"<<EVENTSIZE<<std::endl;
+    // std::cout<<"RB constructor succeed"<<std::endl;
+    // std::cout<<"m_bufSizeByte"<<m_bufSizeByte<<std::endl;
+    // std::cout<<"RINGBUFSIZE"<<RINGBUFSIZE<<std::endl;
+    // std::cout<<"EVENTSIZE"<<EVENTSIZE<<std::endl;
     //buffer initialization
     /*needed??*/
   }
@@ -47,7 +49,7 @@ namespace LSTDAQ{
   bool RingBuffer::init()
   {
   }
-  unsigned int RingBuffer::write( char *buf,unsigned int wbytes)
+  int RingBuffer::write( char *buf,unsigned int wbytes)
   {
     unsigned int retval;
     //****** mutex lock ******
@@ -58,9 +60,19 @@ namespace LSTDAQ{
     if( m_Nw > m_Nr +RINGBUFSIZE -2)
     {
       std::cout<<"W m_Nw = "<<m_Nw<<",m_Nmw = "<<m_Nmw<<std::endl;
-      std::cout<< " m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
+      // std::cout<< " m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
       std::cout<<"write wait-->"<<std::endl;
-      pthread_cond_wait(m_cond, m_mutex);
+      struct timeval now;
+      gettimeofday(&now,NULL);
+      m_tsWait.tv_sec=now.tv_sec+TIMETOWAIT;
+      int rtn;
+      if(pthread_cond_timedwait(m_cond, m_mutex,&m_tsWait)
+	 ==ETIMEDOUT)
+         {
+           pthread_mutex_unlock(m_mutex);
+	   std::cout<<"W timeout"<<std::endl;
+           return -1;
+         };
     }
     
     //****** write to RingBuffer ******
