@@ -1,0 +1,49 @@
+***LSTDAQ starts***
+This machine has12 cpus
+****** Configuration of RinbBuffers are set ******
+2 Collectors will be created for 14 connections.
+RBid shCid      IP address      port 
+RB 0|     0|     192.168.10.11|   24
+RB 1|     1|     192.168.10.12|   24
+RB 2|     0|     192.168.10.21|   24
+RB 3|     0|     192.168.10.22|   24
+RB 4|     0|     192.168.10.23|   24
+RB 5|     0|     192.168.10.24|   24
+RB 6|     0|     192.168.10.25|   24
+RB 7|     0|     192.168.10.26|   24
+RB 8|     1|     192.168.10.27|   24
+RB 9|     1|     192.168.10.28|   24
+RB10|     1|     192.168.10.29|   24
+RB11|     1|     192.168.10.30|   24
+RB12|     1|     192.168.10.32|   24
+RB13|     1|     192.168.10.33|   24
+*** connection initialization ***
+*** connection initialization ***
+ConnectTCP::Connected1(5) 192.168.10.12:24
+ConnectTCP::Connected1(4) 192.168.10.11:24
+ConnectTCP::Connected1(8) 192.168.10.21:24
+ConnectTCP::Connected1(7) 192.168.10.27:24
+ConnectTCP::Connected1(9) 192.168.10.22:24
+ConnectTCP::Connected1(10) 192.168.10.28:24
+ConnectTCP::Connected1(12) 192.168.10.29:24
+ConnectTCP::Connected1(11) 192.168.10.23:24
+ConnectTCP::Connected1(13) 192.168.10.30:24
+ConnectTCP::Connected1(14) 192.168.10.24:24
+ConnectTCP::Connected1(15) 192.168.10.32:24
+ConnectTCP::Connected1(16) 192.168.10.25:24
+ConnectTCP::Connected1(17) 192.168.10.33:24
+ConnectTCP::Connected1(18) 192.168.10.26:24
+*** Builder_thread starts to read ***
+100000events from 14RBs
+*** Collector_thread starts to read ***
+*** Collector_thread starts to read ***
+Coll0 thread end
+Coll1 thread end
+100000events read.
+duration for requisition :2285713usec
+duration for acquisition :1434747usec
+Read Freq :69698[Hz]
+Read Rate :518.991[Mbps]
+Throughput:7.09559[Gbps]
+Builder thread end.100000data was read.
+LSTDAQ end
