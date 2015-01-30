@@ -1,8 +1,35 @@
 /******************************/
 // LSTDAQ ver2.0
 //  Kazuma Ishio
-//  Modified on 2014/12/21
+//  ThruputMes is modified to output Nr too.
+//
+//  Based on
+//  2014/12/27_1 MergeTest (Event Merge with throwing events with skipped Ntrig)
+//  2014/12/26_3 For RingBuf Estimation
+//  2014/12/25_2 LongTermTest without merge
+//  2014/12/23 without merge version 2
+//
 /******************************/
+// added:
+//  THRUPUTMES_INTERVAL in Config.hpp
+//  ThruPutMes_thread in Master.cpp
+//  getNw in RingBuffer.cpp, RingBuffer.hpp
+//  evtNo,trgNo SkipCounter is implemented.
+//    result is output as ERRMESFILE(see Config.hpp)
+//
+/******************************/
+//CPU id specification
+//
+//
+//Collectors;
+//  cpuid = Cid%Ncpu;
+//  (0,1,2...,nColl-1) in case Cid<Ncpu
+//Builders;
+//  cpuid = nColl%Ncpu;
+//  (nColl) in case Cid<Ncpu
+//ThruPutMes;
+//  cpuid = (nColl+1)%Ncpu;
+
 
 
 
@@ -23,9 +50,13 @@
 #include "Config.hpp"
 
 
+#include <time.h>//itimespec
+#include <sys/timerfd.h>//timer in ThruPutMes_thread
+#include <assert.h>
+
 #define DAQ_NEVENT  100000
 int infreq;
-int Ndaq;
+unsigned long  Ndaq;
 bool datacreate;
 
 //variables for start synchronizer
@@ -114,6 +145,195 @@ void sRBdelete(int nServ)
     delete sRB[i].rb;
   }
 }
+
+/********************************/
+// ThruPutMes thread
+/********************************/
+void *ThruPutMes_thread(void *arg)
+{
+  //basic preparation
+  sRingBuffer *srb[MAX_CONNECTION];
+  srb[0]= (sRingBuffer*)arg;
+//  double readfreqC[MAX_CONNECTION];//Collector
+//  double readrateC[MAX_CONNECTION];//Collector
+//  double readfreqB[MAX_CONNECTION];//Builder
+//  double readrateB[MAX_CONNECTION];//Builder
+  
+//  unsigned long Nw[MAX_CONNECTION]={0};
+  unsigned long Nr[MAX_NWMES][MAX_CONNECTION]={0};
+//  unsigned long prevNw[MAX_CONNECTION]={0};
+//  unsigned long prevNr[MAX_CONNECTION]={0};
+  unsigned long Nw[MAX_NWMES][MAX_CONNECTION]={0};
+
+  
+  
+  //cout<<"*** ThruPutMes_thread initialization ***"<<endl;
+  int nRB =0;
+  while(1)
+  {
+    // cout<<"srb["<<nRB<<"] :"<<srb[nRB]->next<<endl;
+    if(srb[nRB]->next==0||nRB==MAX_RINGBUF)break;
+    srb[nRB+1]=srb[nRB]->next;
+    nRB++;
+  }
+  
+  int nColl = 1+ getMaxCid();
+  
+  //*********** CPU Specification    *************//
+  int cpuid;
+  cpuid = (nColl+1)%Ncpu;
+#ifdef __CPU_ZERO
+  cpu_set_t mask;
+  __CPU_ZERO(&mask);
+  __CPU_SET(Ncpu,&mask);
+  if(sched_setaffinity(0,sizeof(mask), &mask) == -1)
+    printf("WARNING: failed to set CPU affinity... (cpuid=%d)\n",cpuid);
+#endif
+  
+  //*********** Output File Creation *************//
+ char buf[128];
+// sprintf(buf,"ThruPutMes_infreq%d_%dto%02d.dat"
+//         ,infreq
+//         ,nColl
+//         ,nRB);
+// FILE *fp_ms;
+// fp_ms = fopen(buf,"w");
+// fprintf(fp_ms,"InFreq=%d\n",infreq);
+// fprintf(fp_ms,"readrate by Coll[Mbps], readrate by Bld[Mbps]\n");
+  sprintf(buf,"RingBufMes_infreq%d_%dto%02d.dat"
+          ,infreq
+          ,nColl
+          ,nRB);
+  FILE *fp_ms;
+  fp_ms = fopen(buf,"w");
+  fprintf(fp_ms,"InFreq=%d\n",infreq);
+  fprintf(fp_ms,"Nw in RingBuffer　　　　　　Nr in RingBuffer\n");
+  
+ fprintf(fp_ms, "count");
+ for(int i =0;i<nRB;i++)
+ {
+   fprintf(fp_ms, "   RB%02d   ",i);
+ }
+  for(int i =0;i<nRB;i++)
+  {
+    fprintf(fp_ms, "   RB%02d   ",i);
+  }
+ // for(int i =0;i<nRB;i++)
+ // {
+ //   fprintf(fp_ms, "  RB%02d_B[Mbps]  ",i);
+ // }
+ fprintf(fp_ms,"\n");
+
+  //*********** Timer Initialization *************//
+  int interval;
+  struct itimerspec its;
+  int timerfd;
+  int ret;
+  // interval = THRUPUTMES_INTERVAL;
+  
+  //time to begin;
+  its.it_value.tv_sec = THRUPUTMES_STARTSEC;
+  its.it_value.tv_nsec = 0;
+  //interval
+  its.it_interval.tv_sec = THRUPUTMES_INTERVALSEC;
+  its.it_interval.tv_nsec = THRUPUTMES_INTERVALNSEC;
+  
+
+  timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
+  ret = timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &its, NULL);
+
+  //*********** Start Synchronization *************//
+  while(initEnd<nColl);
+  // cout<<"Bld Confirmed all"<<endl;
+  cout<<"*** ThruPutMes_thread initend ***"<<endl;
+  pthread_mutex_lock(&mutex_initLock);
+  pthread_cond_broadcast(&cond_allend);
+  pthread_mutex_unlock(&mutex_initLock);
+
+  
+  //*********** RingBuffer Measuremet *************//
+//  fprintf(stderr, "  Throughput in Mbps   \n");
+ // for(int i =0;i<nRB;i++)
+ // {
+ //   fprintf(stderr, "   RB%02d    ",i);
+ // }
+ //  fprintf(stderr, "\n");
+
+  unsigned long Nread=0;
+    int ReadEnd=0;
+    bool bReadEnd[MAX_CONNECTION]={false};
+  while (1)
+  {
+    uint64_t v;
+    ret = read(timerfd, &v, sizeof(v));
+    assert(ret == sizeof(v));
+    //    if (v > 1) {
+    //      fputc('o', stderr);
+    //    } else if (!quite) {
+    //      fputc('.', stderr);
+    //    }
+    
+    for(int i =0;i<nRB;i++)
+    {
+      Nw[Nread][i]=srb[i]->rb->getNw();
+      Nr[Nread][i]=srb[i]->rb->getNr();
+    }
+    for(int i =0;i<nRB;i++)
+    {
+//      readfreqC[i]=(double)(Nw[i]-prevNw[i])/(double)interval;
+//      readrateC[i]=readfreqC[i]*(double)EVENTSIZE*8./1000./1000.;
+//      prevNw[i]=Nw[i];
+//      readfreqB[i]=(double)(Nr[i]-prevNr[i])/(double)interval;
+//      readrateB[i]=readfreqB[i]*(double)EVENTSIZE*8./1000./1000.;
+//      prevNr[i]=Nr[i];
+      
+      if(Nr[i]>=Ndaq && !bReadEnd[i])
+      {
+        ReadEnd++;
+        bReadEnd[i]=true;
+      }
+    }
+//    for(int i =0;i<nRB;i++)
+//    {
+//      fprintf(stderr, "%8.3f  ",readrateC[i]);
+//    }
+//    fprintf(stderr, "\n");
+
+//    for(int i =0;i<nRB;i++)
+//    {
+//      fprintf(fp_ms,"%8.3f  ",readrateC[i]);
+//    }
+    // for(int i =0;i<nRB;i++)
+    // {
+    //   fprintf(fp_ms,"%8.3f  ",readrateB[i]);
+    // }
+//    fprintf(fp_ms, "\n");
+    Nread++;
+    if (Nread==MAX_NWMES)break;
+    // if (ReadEnd==nRB)break;
+    if (ReadEnd>0)break;
+  }
+
+  
+  for(int i=0; i<Nread;i++)
+  {
+    fprintf(fp_ms,"%5d ",i);
+    for(int j=0; j<nRB; j++)
+    {
+      fprintf(fp_ms,"%9d ",Nw[i][j]);
+    }
+    for(int j=0; j<nRB; j++)
+    {
+      fprintf(fp_ms,"%9d ",Nr[i][j]);
+    }
+    
+    fprintf(fp_ms, "\n");
+  }
+  fclose(fp_ms);
+  
+}
+
+
 
 
 /********************************/
@@ -232,6 +452,7 @@ void *Collector_thread(void *arg)
   int nRdBytes;
   bool bReadEnd[MAX_CONNECTION]={false};
   int ReadEnd=0;
+  size_t reqsize;
   for(;;)
   {
     memcpy(&fds,&readfds,sizeof(fd_set));
@@ -240,9 +461,27 @@ void *Collector_thread(void *arg)
     {
       if( FD_ISSET(sock[i], &fds) )
       {
-        nRdBytes=(tcps[i]->readSock(tempbuf,EVENTSIZE));
+	nRdBytes=0;
+	reqsize=EVENTSIZE;
+	while(1)
+	{
+	  nRdBytes+=(tcps[i]->readSock(&tempbuf[nRdBytes],reqsize));
+	  if(nRdBytes==EVENTSIZE)
+	  {
+	    // cout<<"Y"<<nRdBytes<<endl;
+	    break;
+	  }
+	  else if(nRdBytes<EVENTSIZE)
+	  {
+	    reqsize=EVENTSIZE-nRdBytes;
+	  }
+	  else
+	  {
+	    exit(1);
+	  }
+	  // cout<<"N"<<nRdBytes<<endl;
+	}
         //if(nRdBytes != EVENTSIZE) is usual
-        llReadBytes[i]+=nRdBytes;
         // cout<<"RB"<<srb[i]->sRBid<<"read"<<nRdBytes<<endl;
         // cout<<i<<"  "<<nRdBytes<<"  "<<llReadBytes[i]<<endl;
         // // cout<<tempbuf<<endl;
@@ -250,7 +489,12 @@ void *Collector_thread(void *arg)
         if((srb[i]->rb->write(tempbuf,nRdBytes))==-1)
         {
           cout<<"RB"<<srb[i]->sRBid<<":W wait exceeded"<<endl;
+	  //exit(1);
         }
+	else
+	{
+	  llReadBytes[i]+=nRdBytes;
+	}
         //cout<<"connection"<<i<<bReadEnd[i]<<endl;
         if(llReadBytes[i]>=daqsize && !bReadEnd[i])
         {
@@ -324,87 +568,204 @@ void *Builder_thread(void *arg)
   pthread_mutex_unlock(&mutex_initLock);
   
   //*********** Read Data From RingBuffer without build *************//
- // bool bReadEnd[MAX_CONNECTION]={false};
- // int ReadEnd=0;
- // unsigned long Nread[MAX_CONNECTION]={0};
- // LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
- // dt->DAQstart();
- // while(1)
- // {
- //   //cout<<"@@"<<ReadEnd<<endl;
- //   offset = 0;
- //   for(int i =0;i<nRB;i++)
- //   {
- //     //Nread[i] =(srb[i]->rb->read(tempbuf));
- //     Nread[i]=srb[i]->rb->read(tempbuf);
- //     // cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
- //     //cout<<i<<":"<<Nread[i];//<<endl;
- //     if(Nread[i]>=Ndaq && !bReadEnd[i])
- //     {
- //       ReadEnd++;
- //       bReadEnd[i]=true;
- //     }
- //     //cout<<"ReadEnd"<<ReadEnd<<endl;
- //   }
- //   dt->readend();
- //   if (ReadEnd==nRB)break;
- // }
+//  bool bReadEnd[MAX_CONNECTION]={false};
+//  int ReadEnd=0;
+//  int ReadCount=0;
+//  unsigned long long NreadAll=0;
+//  unsigned long Nread[MAX_CONNECTION]={0};
+//    unsigned int *p_Ntrg[MAX_CONNECTION];
+//    unsigned int *p_Nevt[MAX_CONNECTION];
+//    unsigned long int Ntrg[MAX_CONNECTION]={0};
+//    unsigned long int Nevt[MAX_CONNECTION]={0};
+//    unsigned long int NtrgPrev[MAX_CONNECTION]={0};
+//    unsigned long int NevtPrev[MAX_CONNECTION]={0};
+//    unsigned long int NtrgSkip[MAX_CONNECTION]={0};
+//    unsigned long int NevtSkip[MAX_CONNECTION]={0};
+//  
+//  for(int i=0;i<nRB;i++)
+//  {
+//    NevtSkip[i]=0;
+//    NtrgSkip[i]=0;
+//  }
+//
+//
+//  LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
+//  dt->DAQstart();
+//  while(1)
+//  {
+//    //cout<<"@@"<<ReadEnd<<endl;
+//    offset = 0;
+//    for(int i =0;i<nRB;i++)
+//    {
+//      /*modified on 1227 due to modification of ret val in RingBuffer.cpp*/
+//      if(srb[i]->rb->read(&tempbuf[offset])==0)
+//      {
+//        Nread[i]++;
+//        NreadAll++;
+//        ReadCount++;
+//        p_Nevt[i]=(unsigned int*)&tempbuf[offset+HEADERLEN+IPADDRLEN];
+//        p_Ntrg[i]=(unsigned int*)&tempbuf[offset+HEADERLEN+IPADDRLEN+EVTNOLEN];
+//        Nevt[i]=(unsigned long)*p_Nevt[i];
+//        Ntrg[i]=(unsigned long)*p_Ntrg[i];
+//	// cout<<Nevt[i] - NevtPrev[i] - 1<<endl;
+//	// cout<<Ntrg[i] - NtrgPrev[i] - 1<<endl;
+//        NevtSkip[i]= (unsigned long )
+//	  ((double)NevtSkip[i]+((double)Nevt[i]-(double)NevtPrev[i] -1.));
+//        NtrgSkip[i]= (unsigned long)
+//	  ((double)NtrgSkip[i]+((double)Ntrg[i]-(double)NtrgPrev[i]-1.));
+//	NevtPrev[i]=Nevt[i];
+//	NtrgPrev[i]=Ntrg[i];
+//      }
+//      // cout << "Bld read from Coll"<<srb[i]->sRBid <<" :"<< tempbuf <<endl;
+//      //cout<<i<<":"<<Nread[i];//<<endl;
+//      if(Nread[i]>=Ndaq && !bReadEnd[i])
+//      {
+//        ReadEnd++;
+//        bReadEnd[i]=true;
+//      }
+//      if (ReadCount==nRB) {
+//        dt->readend();
+//        ReadCount=0;
+//      }
+//      offset+=EVENTSIZE;
+//    }
+//
+//    if (ReadEnd==nRB)break;
+//  }
 //  
 //  dt->DAQend();
-//  dt->DAQsummary(infreq,Ndaq,nRB,nColl);
+//  dt->DAQsummary(infreq,NreadAll,nRB,nColl,Ntrg,Nevt);
+//  dt->DAQerrsummary(infreq,NreadAll,nRB,Ntrg,Nevt,NtrgSkip,NevtSkip);
 //  fclose(fp_data);
-//  cout << "Builder thread end."<< Nread[0]<<"data was read."<<endl;
-
+//  cout << "Builder thread(without Merge) end."<< Nread[0]<<"data was read."<<endl;
+//
 
   //*********** Read Data From RingBuffer with build *************//
-  unsigned long Nread=0;
+  bool bReadEnd[MAX_CONNECTION]={false};
+  // bool bReadStart=false;
+  int ReadEnd=0;
+  
+  unsigned long NreadAll=0;
+ unsigned long Nread[MAX_CONNECTION]={0};
+  unsigned long cNtrg;  //current Ntrg to collect.
+  unsigned long rNtrg;  //read Ntrg. first set to rNtrg=cNtrg, when larger Ntrg is come, stored.
   unsigned int *p_Ntrg[MAX_CONNECTION];
   unsigned int *p_Nevt[MAX_CONNECTION];
   unsigned long Ntrg[MAX_CONNECTION]={0};
-  unsigned long Nevt[MAX_CONNECTION]={0};
-  unsigned int *pa;
-  unsigned int a;
-  char header[3];
+  unsigned long Nevt[MAX_CONNECTION]={0}; 
   LSTDAQ::DAQtimer *dt=new LSTDAQ::DAQtimer(nRB);
   dt->DAQstart();
-  while(Nread<Ndaq)
+  
+  cNtrg=0;
+  int SkipRB=-1;
+
+  cout<<"nRB"<<nRB<<endl;
+  while(1)
   {
     offset=0;
-    Nread++;
     for(int i=0;i<nRB;i++)
     {
-      while(Nread!=srb[i]->rb->read(&tempbuf[offset]))
+      // cout<<"SkipRB"<<SkipRB<<endl;
+      if(i==SkipRB||bReadEnd[i])
       {
-        continue;
+        offset+=EVENTSIZE;
       }
+      else
+      {
+	// cout<<i<<" "<<SkipRB<<endl;
+        while(srb[i]->rb->read(&tempbuf[offset])==-1)continue;
+	// if(!bReadStart)bReadStart=true;
         p_Nevt[i]=(unsigned int*)&tempbuf[offset+HEADERLEN+IPADDRLEN];
         p_Ntrg[i]=(unsigned int*)&tempbuf[offset+HEADERLEN+IPADDRLEN+EVTNOLEN];
-	// printf("%c%c ",tempbuf[offset],tempbuf[offset+1]);
-	// printf("%d ",*p_Nevt[i]);
-        //cout<<"nowRB"<<i;//<<endl;
-	
-	Nevt[i]=(unsigned long)*p_Nevt[i];
-	Ntrg[i]=(unsigned long)*p_Ntrg[i];
-	if(Nread+DAQ_NEVENT<Ntrg[i])
-	{
-	  dt->DAQerrend(i,infreq,Nread,nRB,nColl,Ntrg,Nevt);
-	  exit(1);
-	}
-	// printf("%d ",Nevt[i]);
-	// printf("%d ",Ntrg[i]);
+        Nevt[i]=(unsigned long)*p_Nevt[i];
+        Ntrg[i]=(unsigned long)*p_Ntrg[i];
+	// cout<<i<<" "<<Nevt[i]<<endl;
+        Nread[i]++;
+        if(Nread[i]>=Ndaq)
+        {
+	  printf("RB%d end",i);
+          bReadEnd[i]=true;
+          ReadEnd++;
+        }
+        
+        if(Ntrg[i]==cNtrg)
+        {
+          offset+=EVENTSIZE;
+        }
+        else if(Ntrg[i]<cNtrg)
+        {
+          while(1)
+          {
+            while(srb[i]->rb->read(&tempbuf[offset])==-1)continue;
+            p_Nevt[i]=(unsigned int*)&tempbuf[offset+HEADERLEN+IPADDRLEN];
+            p_Ntrg[i]=(unsigned int*)&tempbuf[offset+HEADERLEN+IPADDRLEN+EVTNOLEN];
+            Nevt[i]=(unsigned long)*p_Nevt[i];
+            Ntrg[i]=(unsigned long)*p_Ntrg[i];
+	    // cout<<i<<" "<<Nevt[i]<<endl;
+            Nread[i]++;
+            if(Nevt[i]>=Ndaq)
+            {
+	      printf("RB%d end",i);
+              bReadEnd[i]=true;
+              ReadEnd++;
+              break;
+            }
+            if(Ntrg[i]==cNtrg)
+            {
+              offset+=EVENTSIZE;
+              break;
+            }
+            else if(Ntrg[i]<cNtrg)
+            {
+              continue;
+            }
+            else //if(Ntrg[i]>cNtrg)
+            {
+	      // printf("A");
+              rNtrg=Ntrg[i];
+              SkipRB=i;
+              break;
+            }
+          }//while(1)
+        }//if(skip or end)
+        else //if(Ntrg[i]>cNtrg)
+        {
+          rNtrg=Ntrg[i];
+          SkipRB=i;
+        }
+      }//for(i<nRB)
+      
+      // cout<<"rNtrg"<<rNtrg<<"cNtrg"<<cNtrg<<endl;
+      if(rNtrg>cNtrg)
+      {
+	// printf("B");
+        cNtrg=rNtrg;
+        break;
+      }
+      // if(bReadStart && cNtrg==rNtrg && i==(nRB-1))
+      if(cNtrg==rNtrg && i==(nRB-1))
+      {
+	dt->readend();
+	NreadAll++;
+        cNtrg++;
+        rNtrg++;
+	SkipRB=-1;
+	//fwrite;
+	if(datacreate==true)
+	  fwrite(&tempbuf,dataLength,1,fp_data);
 
-      offset+=EVENTSIZE;
+      }
+
     }
-    dt->readend();
-    //fwrite;
-    if(datacreate==true)
-      fwrite(&tempbuf,dataLength,1,fp_data);
-    // usleep(300000);
+    // cout<<"RE"<<ReadEnd<<endl;
+    // if (ReadEnd==nRB)break;
+    if (ReadEnd>0)break;
   }
+  
   dt->DAQend();
-  dt->DAQsummary(infreq,Nread,nRB,nColl,Ntrg,Nevt);
+  dt->DAQsummary(infreq,NreadAll,nRB,nColl,Ntrg,Nevt);
   fclose(fp_data);
-  cout << "Builder thread end."<< Nread<<"data was read."<<endl;
+  cout << "Builder thread end."<< NreadAll<<"data was read."<<endl;
   //sleep(1);
 }
 
@@ -420,7 +781,7 @@ int main(int argc, char** argv)
   infreq=0;
   Ndaq=DAQ_NEVENT;
   datacreate=false;
-  if(argv[1][0]=='h'||argc >4)
+  if(argc >4||argc<2)
     usage(argv[0]);
   if(argc >= 2)
     infreq = atoi(argv[1]);
@@ -527,7 +888,7 @@ int main(int argc, char** argv)
   //  Multi-threaded process creation
   /******************************************/
   // cout << "***  Thread create  ***"<<endl;
-  pthread_t handle[nColl+1];
+  pthread_t handle[nColl+2];
   for(int i=0;i<nColl;i++)
   {
     pthread_create(&handle[i],
@@ -540,9 +901,14 @@ int main(int argc, char** argv)
                  NULL,
                  &Builder_thread,
                  &sRB[0]);
+  pthread_create(&handle[nColl+1],
+                 NULL,
+                 &ThruPutMes_thread,
+                 &sRB[0]);
+
   // cout <<"Threads created. "<<
   // Ndaq << "events will be transferred each"<<endl;
-  for(int i=0;i<nColl+1;i++)
+  for(int i=0;i<nColl+2;i++)
     pthread_join(handle[i],NULL);
   
   cout << "LSTDAQ end" <<endl;

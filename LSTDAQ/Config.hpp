@@ -18,5 +18,17 @@
 #define MAX_CONNECTION 48
 #define MAX_RINGBUF 49
 
+//error exit threshold 
 #define ERR_NDROPPED 100000
+
+//interval to measure throughput
+#define THRUPUTMES_STARTSEC 1
+#define THRUPUTMES_INTERVALSEC 1
+#define THRUPUTMES_INTERVALNSEC 0 
+//1000000 for 1msec
+#define MAX_NWMES 10000
+
+//outputfile by DAQtimer
+#define MESFILE "LSTDAQmeasure.dat"
+#define ERRMESFILE "LSTDAQerrmeasure.dat"
 #endif

@@ -1,7 +1,7 @@
 #ifndef __DAQTIMER_H
 #define __DAQTIMER_H
 #define TIME_SEC2NSEC	1000000000
-#define MESFILE "LSTDAQmeasure.dat"
+
 
 #include <fstream> //FILE discriptor
 
@@ -21,11 +21,19 @@ namespace LSTDAQ{
     void readend();
     void DAQend();
     void DAQsummary(int infreq, 
-		    unsigned long long nEvent,
+		    unsigned long long NreadAll,
 		    int nRB,
 		    int nColl,
 		    unsigned long Ntrg[MAX_CONNECTION], 
 		    unsigned long Nevt[MAX_CONNECTION]);
+    void DAQerrsummary(int infreq,
+                       unsigned long long NreadAll,
+		       int nRB,
+                       unsigned long Ntrg[MAX_CONNECTION],
+                       unsigned long Nevt[MAX_CONNECTION],
+                       unsigned long NtrgSkip[MAX_CONNECTION],
+                       unsigned long NevtSkip[MAX_CONNECTION]);
+                       
     void DAQerrend(int errRB,
 		   int infreq,
 		   unsigned long long nEvent,

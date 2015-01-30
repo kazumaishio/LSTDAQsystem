@@ -62,9 +62,12 @@ namespace LSTDAQ{
       std::cout<<"W m_Nw = "<<m_Nw<<",m_Nmw = "<<m_Nmw<<std::endl;
       // std::cout<< " m_Nr = "<<m_Nr<<",m_Nmr = "<<m_Nmr<<std::endl;
       std::cout<<"write wait-->"<<std::endl;
-      struct timeval now;
-      gettimeofday(&now,NULL);
+      // struct timeval now;
+      // gettimeofday(&now,NULL);
+      struct timespec now;
+      clock_gettime(CLOCK_REALTIME,&now);
       m_tsWait.tv_sec=now.tv_sec+TIMETOWAIT;
+      m_tsWait.tv_nsec=now.tv_nsec+TIMETOWAIT_USEC;
       int rtn;
       if(pthread_cond_timedwait(m_cond, m_mutex,&m_tsWait)
 	 ==ETIMEDOUT)
@@ -129,7 +132,7 @@ namespace LSTDAQ{
     //****** prevent from overreading ******
     if (m_Nr==m_Nw)
     {
-      return m_Nr;
+      return -1;
     }
     //****** read from RingBuffer ******
     else if(m_Nr<m_Nw)
@@ -150,11 +153,20 @@ namespace LSTDAQ{
       //****** mutex unlock ******
       pthread_cond_signal(m_cond);
       pthread_mutex_unlock(m_mutex);
-      return m_Nr;
+      return 0;
     }
     else
     {
       exit(1);
     }
+  }
+  
+  unsigned long RingBuffer::getNw() throw()
+  {
+    return m_Nw;
+  }
+  unsigned long RingBuffer::getNr() throw()
+  {
+    return m_Nr;
   }
 }

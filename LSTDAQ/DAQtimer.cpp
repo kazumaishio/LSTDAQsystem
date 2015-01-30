@@ -88,7 +88,7 @@ namespace LSTDAQ{
     current_utc_time(&tsEnd);
   }
   void DAQtimer::DAQsummary(int infreq, 
-			    unsigned long long nEvent,
+			    unsigned long long NreadAll,
 			    int nRB,
 			    int nColl,
 			    unsigned long Ntrg[MAX_CONNECTION],
@@ -98,12 +98,13 @@ namespace LSTDAQ{
     unsigned long long llreq_usec = GetRealTimeInterval(&tsStart,&tsEnd);
     //daq time (from 2nd to DAQ_NEVENTth events)
     unsigned long long lldaq_usec = llreq_usec - lltime_diff[0];
-    
-    std::cout<<nEvent<<"events read."<<std::endl;
+    std::cout<<"readcount:"<<readcount<<std::endl;
+    std::cout<<"NreadAll :"<<NreadAll<<std::endl;
+    std::cout<<"readcount*nRB="<<readcount*nRB<<std::endl;
     std::cout<<"duration for requisition :"<<llreq_usec<<"usec"<<std::endl;
     std::cout<<"duration for acquisition :"<<lldaq_usec<<"usec"<<std::endl;
     
-    double readfreq = (double)(nEvent-1)/(double)lldaq_usec*1000000.0;
+    double readfreq = (double)(readcount-1)/(double)lldaq_usec*1000000.0;
     double readrate = (double)readfreq* (8.*(double)EVENTSIZE/1024./1024.);
     double thruput = readrate *(double)nRB/1024.;
 
@@ -122,13 +123,13 @@ namespace LSTDAQ{
     if (!m_fout) {
       m_fout.open(m_foutName);
       m_fout<<"The result of LSTDAQ \n";
-      m_fout<<"nColl nConn InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps]   nEvents";
+      m_fout<<"nColl nConn InFreq[Hz]  RdFreq[Hz]  RdRate[Mbps]   NreadAll";
       for(int i=0;i<nRB;i++)
       {
         m_fout<<" Nevt["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
         m_fout<<" Ntrg["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
       }
-      m_fout<<" ReadTrial";
+      m_fout<<" readcount";
       m_fout<<std::endl;
       std::cout<<"New measurement file is created. "<<std::endl;
     }
@@ -144,7 +145,7 @@ namespace LSTDAQ{
     << std::setw(10)  << std::setfill(' ')<< std::fixed<< std::setprecision(3)
     << readrate       << "   "
     << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
-    << nEvent         << " ";
+    << NreadAll         << " ";
     for(int i=0;i<nRB;i++)
     {
       m_fout
@@ -158,7 +159,66 @@ namespace LSTDAQ{
     << readcount      <<"\n";
     m_fout.close();
   }
+  
+  void DAQtimer::DAQerrsummary(int infreq,
+                               unsigned long long NreadAll,
+			       int nRB,
+                               unsigned long Ntrg[MAX_CONNECTION],
+                               unsigned long Nevt[MAX_CONNECTION],
+                               unsigned long NtrgSkip[MAX_CONNECTION],
+                               unsigned long NevtSkip[MAX_CONNECTION])
+  
+  {
+    
+    
+    //**** file create
+    std::ofstream   m_fout;
+    std::sprintf(m_foutName,ERRMESFILE);
+    m_fout.open(m_foutName,std::ios_base::in | std::ios_base::out | std::ios_base::ate);
+    if (!m_fout) {
+      m_fout.open(m_foutName);
+      m_fout<<"The result of LSTDAQ \n";
+      m_fout<<"InFreq[Hz] readcount  NreadAll";
+      for(int i=0;i<nRB;i++)
+      {
+        m_fout<<"   Nevt["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
+        m_fout<<" NevtSkip["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
+        m_fout<<"   Ntrg["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
+        m_fout<<" NtrgSkip["<< std::setw(2)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)<<i<<"]";
+      }
+      m_fout<<std::endl;
+      std::cout<<"New measurement file is created. "<<std::endl;
+    }
+    m_fout//<<" "
+    << std::setw(6)<< std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << infreq         << " "
+    << std::setw(11)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << readcount       << " "
+    << std::setw(12)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << NreadAll         << " ";
+    for(int i=0;i<nRB;i++)
+    {
+      m_fout
+      << std::setw(11)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+      << Nevt[i]         << " "
+      << std::setw(11)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+      << NevtSkip[i]         << " "
+      << std::setw(11)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+      << Ntrg[i]         << " "
+      << std::setw(11)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+      << NtrgSkip[i]         << " ";
+    }
+    m_fout
+    << std::setw(8)  << std::setfill(' ')<< std::fixed<< std::setprecision(0)
+    << readcount      <<std::endl;
+    m_fout.close();
 
+    
+  }
+  
+  
+  
+  //MUST BE MODIFIED. NO LONGER UP TO DATE
   void DAQtimer::DAQerrend(int errRB,
 			   int infreq, 
 			   unsigned long long nEvent,

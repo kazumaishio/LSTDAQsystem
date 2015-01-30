@@ -5,8 +5,9 @@
 #define EVENTSIZE 976
 #endif
 
-#define RINGBUFSIZE 2000
-#define TIMETOWAIT  2
+#define RINGBUFSIZE 50000
+#define TIMETOWAIT  0
+#define TIMETOWAIT_USEC  1000
 #include <pthread.h>
 #include "Config.hpp"
 namespace LSTDAQ{
@@ -23,7 +24,10 @@ namespace LSTDAQ{
     int write( char *buf,unsigned int wbytes);
     int read(char *buf);
 
-    //
+    //getter methods
+    unsigned long getNw() throw();
+    unsigned long getNr() throw();
+    
   private:
     pthread_mutex_t *m_mutex;
     pthread_cond_t *m_cond;
